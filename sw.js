@@ -1,0 +1,35 @@
+const SHELL = 'fichario-shell-1', RUNTIME = 'fichario-runtime-1';
+const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'data/index.json', 'data/hashes.bin'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys()
+    .then(keys => Promise.all(keys.filter(k => k !== SHELL && k !== RUNTIME).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+async function cacheFirst(req) {
+  const hit = await caches.match(req);
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res.ok || res.type === 'opaque') (await caches.open(RUNTIME)).put(req, res.clone());
+  return res;
+}
+async function networkFirst(req) {
+  try {
+    const res = await fetch(req);
+    if (res.ok) (await caches.open(req.url.startsWith(self.location.origin) ? SHELL : RUNTIME)).put(req, res.clone());
+    return res;
+  } catch (err) {
+    const hit = await caches.match(req);
+    if (hit) return hit;
+    throw err;
+  }
+}
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const { hostname } = new URL(e.request.url);
+  const stable = hostname === 'assets.tcgdex.net' || hostname === 'cdn.jsdelivr.net' || hostname === 'fonts.gstatic.com' || hostname === 'tessdata.projectnaptha.com';
+  e.respondWith(stable ? cacheFirst(e.request) : networkFirst(e.request));
+});

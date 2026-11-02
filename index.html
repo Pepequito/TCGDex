@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Fichário</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Escaneie, organize e acompanhe o valor da sua coleção de Pokémon TCG.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fichário">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#16233b">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="view"></main>
+
+<nav id="tabs" aria-label="Navegação principal">
+  <button data-tab="home" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3zM5 18a3 3 0 0 1 3-3h11"/></svg><span>Coleção</span></button>
+  <button data-tab="sets" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg><span>Sets</span></button>
+  <button id="scanBtn" type="button" aria-label="Escanear carta"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M4 12h16"/></svg></button>
+  <button data-tab="search" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span>Buscar</span></button>
+  <button data-tab="settings" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Ajustes</span></button>
+</nav>
+
+<section id="scanner" hidden aria-label="Scanner de cartas">
+  <video id="video" playsinline muted autoplay></video>
+  <div class="shade"><div id="guide"><i></i><i></i><i></i><i></i></div></div>
+  <div class="scan-top">
+    <button id="scanClose" class="round" type="button" aria-label="Fechar scanner">✕</button>
+    <button id="torch" class="round" type="button" aria-label="Ligar lanterna" hidden>⚡︎</button>
+  </div>
+  <p id="scanStatus" role="status">Abrindo a câmera…</p>
+  <div class="scan-bottom">
+    <label class="ghost" for="photoInput">Usar uma foto</label>
+    <input id="photoInput" type="file" accept="image/*" hidden>
+  </div>
+</section>
+
+<div id="sheetBack" hidden></div>
+<section id="sheet" hidden role="dialog" aria-modal="true"></section>
+<div id="toast" role="status" hidden></div>
+<input id="importInput" type="file" accept="application/json,.json" hidden>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>
