@@ -203,6 +203,7 @@ async function refreshPrices(onStep) {
 const sheet = $('#sheet'), sheetBack = $('#sheetBack');
 let onSheetClose = null;
 function openSheet(html, onClose = null) {
+  sheet.dataset.openedAt = Date.now();
   document.body.classList.add('drawer');
   sheet.innerHTML = html; sheet.hidden = sheetBack.hidden = false; sheet.scrollTop = 0; onSheetClose = onClose;
 }
@@ -338,7 +339,7 @@ const confident = r => r.cards.length && (r.read.number ? r.cards[0].score >= .5
 
 /* ---------- Reconhecimento pela arte ---------- */
 // Mesma conta de tools/export-index.js: DCT da região da arte em 32x32, 128 bits em torno da mediana.
-const S = 32, BITS = 128, ART = { x: .08, y: .11, w: .84, h: .36 }, MATCH_MAX = 36, TILTS = [0, -4, 4];
+const S = 32, BITS = 128, ART = { x: .08, y: .11, w: .84, h: .36 }, MATCH_MAX = 30, TILTS = [0, -4, 4];
 const zig = (() => {
   const z = [];
   for (let s = 1; z.length < BITS; s++) for (let u = 0; u <= s; u++) { const v = s - u; if (u < S && v < S) z.push([u, v]); }
@@ -350,15 +351,49 @@ const artIndex = () => once('index', async () => {
   const [meta, bin] = await Promise.all([getJSON('data/index.json'), fetch('data/hashes.bin').then(r => r.arrayBuffer())]);
   return { ...meta, hashes: new Uint32Array(bin) };
 });
-const thumb = document.createElement('canvas');
-thumb.width = thumb.height = S;
-const thumbCtx = thumb.getContext('2d', { willReadFrequently: true });
-thumbCtx.imageSmoothingQuality = 'high';
 const gray = new Float32Array(S * S), coef = new Float32Array(BITS), cols = new Float32Array(FREQS * S);
-function artHash(src, x, y, w, h, out) {
-  thumbCtx.drawImage(src, x, y, w, h, 0, 0, S, S);
-  const d = thumbCtx.getImageData(0, 0, S, S).data;
-  for (let i = 0; i < S * S; i++) gray[i] = .3 * d[i * 4] + .59 * d[i * 4 + 1] + .11 * d[i * 4 + 2];
+// O quadro é lido da placa de vídeo uma vez só; cada recorte vira média de áreas sobre uma imagem integral.
+const FW = 360, FH = 504, frameCanvas = document.createElement('canvas');
+frameCanvas.width = FW; frameCanvas.height = FH;
+const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+frameCtx.imageSmoothingQuality = 'high';
+const integ = new Float64Array((FW + 1) * (FH + 1));
+function loadFrame(src, W, H, rot) {
+  frameCtx.setTransform(1, 0, 0, 1, 0, 0);
+  frameCtx.fillStyle = '#000'; frameCtx.fillRect(0, 0, FW, FH);
+  frameCtx.translate(FW / 2, FH / 2); frameCtx.rotate(rot * Math.PI / 180); frameCtx.translate(-FW / 2, -FH / 2);
+  frameCtx.drawImage(src, 0, 0, W, H, 0, 0, FW, FH);
+  const d = frameCtx.getImageData(0, 0, FW, FH).data, IW = FW + 1;
+  for (let y = 0; y < FH; y++) {
+    let row = 0;
+    for (let x = 0; x < FW; x++) {
+      const p = (y * FW + x) * 4;
+      row += .3 * d[p] + .59 * d[p + 1] + .11 * d[p + 2];
+      integ[(y + 1) * IW + x + 1] = integ[y * IW + x + 1] + row;
+    }
+  }
+}
+// Desvio padrão do brilho na região da arte: mesa lisa ou papel em branco ficam abaixo de 14.
+function texture() {
+  const IW = FW + 1, x0 = 60, x1 = 300, y0 = 80, y1 = 260, step = 6;
+  let sum = 0, sq = 0, n = 0;
+  for (let y = y0; y < y1; y += step) for (let x = x0; x < x1; x += step) {
+    const v = (integ[(y + step) * IW + x + step] - integ[y * IW + x + step] - integ[(y + step) * IW + x] + integ[y * IW + x]) / (step * step);
+    sum += v; sq += v * v; n++;
+  }
+  return Math.sqrt(sq / n - (sum / n) ** 2);
+}
+function artHash(x, y, w, h, out) {
+  const IW = FW + 1, sx = w / S, sy = h / S, clampX = v => Math.max(0, Math.min(FW, Math.round(v))), clampY = v => Math.max(0, Math.min(FH, Math.round(v)));
+  for (let j = 0; j < S; j++) {
+    let y0 = clampY(y + j * sy), y1 = clampY(y + (j + 1) * sy);
+    if (y1 <= y0) y1 = Math.min(FH, y0 + 1), y0 = y1 - 1;
+    for (let i = 0; i < S; i++) {
+      let x0 = clampX(x + i * sx), x1 = clampX(x + (i + 1) * sx);
+      if (x1 <= x0) x1 = Math.min(FW, x0 + 1), x0 = x1 - 1;
+      gray[j * S + i] = (integ[y1 * IW + x1] - integ[y0 * IW + x1] - integ[y1 * IW + x0] + integ[y0 * IW + x0]) / ((x1 - x0) * (y1 - y0));
+    }
+  }
   // Transformada separável: primeiro as colunas, depois cada coeficiente.
   for (let v = 0; v < FREQS; v++) {
     const c = cosT[v];
@@ -378,28 +413,28 @@ const pop = x => { x -= (x >>> 1) & 0x55555555; x = (x & 0x33333333) + ((x >>> 2
 async function matchArt(src, W, H, rot = 0, limit = 6) {
   const { hashes, cards, paths } = await artIndex();
   const n = cards.length, best = new Uint8Array(n).fill(255), q = new Uint32Array(4);
-  // Reduz o quadro uma vez só: é o que torna as 245 tentativas rápidas num iPhone.
-  const small = document.createElement('canvas');
-  small.width = 180; small.height = 252;
-  const sg = small.getContext('2d', { willReadFrequently: true });
-  sg.imageSmoothingQuality = 'high';
-  sg.translate(90, 126); sg.rotate(rot * Math.PI / 180); sg.translate(-90, -126);
-  sg.drawImage(src, 0, 0, W, H, 0, 0, 180, 252);
-  // Mesa lisa ou papel em branco não têm arte para comparar.
-  const px = sg.getImageData(30, 40, 120, 90).data;
-  let sum = 0, sq = 0;
-  for (let i = 0; i < px.length; i += 4) { const v = px[i + 1]; sum += v; sq += v * v; }
-  const count = px.length / 4;
-  if (Math.sqrt(sq / count - (sum / count) ** 2) < 14) return [{ id: null, dist: 99 }];
-  for (const z of [.86, .93, 1, 1.07, 1.15]) for (let ox = -.075; ox < .08; ox += .025) for (let oy = -.075; oy < .08; oy += .025) {
-    const w = 180 * ART.w * z, h = 252 * ART.h * z;
-    artHash(small, 180 * (ART.x + ox + (1 - z) * ART.w / 2), 252 * (ART.y + oy + (1 - z) * ART.h / 2), w, h, q);
-    for (let i = 0, o = 0; i < n; i++, o += 4) {
-      const d = pop(q[0] ^ hashes[o]) + pop(q[1] ^ hashes[o + 1]) + pop(q[2] ^ hashes[o + 2]) + pop(q[3] ^ hashes[o + 3]);
-      if (d < best[i]) best[i] = d;
+  loadFrame(src, W, H, rot);
+  if (texture() < 14) return [{ id: null, dist: 99 }];
+  // Duas etapas: 100 recortes contra o banco inteiro, depois ajuste fino só nas 150 cartas mais parecidas.
+  const crop = ([z, ox, oy]) => artHash(FW * (ART.x + ox + (1 - z) * ART.w / 2), FH * (ART.y + oy + (1 - z) * ART.h / 2), FW * ART.w * z, FH * ART.h * z, q);
+  const dist = o => pop(q[0] ^ hashes[o]) + pop(q[1] ^ hashes[o + 1]) + pop(q[2] ^ hashes[o + 2]) + pop(q[3] ^ hashes[o + 3]);
+  const coarse = [], where = new Uint8Array(n);
+  for (const z of [.82, .9, 1, 1.1]) for (const ox of [-.06, -.03, 0, .03, .06]) for (const oy of [-.06, -.03, 0, .03, .06]) coarse.push([z, ox, oy]);
+  coarse.forEach((p, k) => {
+    crop(p);
+    for (let i = 0, o = 0; i < n; i++, o += 4) { const d = dist(o); if (d < best[i]) { best[i] = d; where[i] = k; } }
+  });
+  const shortlist = Array.from(best.keys()).sort((a, b) => best[a] - best[b]).slice(0, 150);
+  const seeds = [...new Set(shortlist.slice(0, 8).map(i => where[i]))];
+  for (const k of seeds) {
+    const [z0, x0, y0] = coarse[k];
+    for (const dz of [-.04, 0, .04]) for (const dx of [-.015, 0, .015]) for (const dy of [-.015, 0, .015]) {
+      if (!dz && !dx && !dy) continue;
+      crop([z0 + dz, x0 + dx, y0 + dy]);
+      for (const i of shortlist) { const d = dist(i * 4); if (d < best[i]) best[i] = d; }
     }
   }
-  return Array.from(best.keys()).sort((a, b) => best[a] - best[b]).slice(0, limit).map(i => {
+  return shortlist.sort((a, b) => best[a] - best[b]).slice(0, limit).map(i => {
     const [id, p] = cards[i], localId = id.slice(id.lastIndexOf('-') + 1), image = `https://assets.tcgdex.net/${isJa(id) ? 'ja' : 'en'}/${paths[p]}/${localId}`;
     return { id, localId, name: id, image, imageEn: image, dist: best[i] };
   });
@@ -411,12 +446,13 @@ async function rerank(cards, src, W, H) {
   if (cards.length < 2 || cards[1].dist - cards[0].dist > 5) return cards;
   try {
     const printed = await readDigits(src, W, H);
-    const near = c => { const n = c.localId.replace(/^0+/, ''); return /^d{2,}$/.test(n) && printed.includes(n) && c.dist - cards[0].dist <= 8; };
+    const near = c => { const n = c.localId.replace(/^0+/, ''); return /^\d{2,}$/.test(n) && printed.includes(n) && c.dist - cards[0].dist <= 8; };
     return [...cards].sort((a, b) => near(b) - near(a) || preferred(b, cards) - preferred(a, cards) || a.dist - b.dist);
   } catch { return [...cards].sort((a, b) => preferred(b, cards) - preferred(a, cards) || a.dist - b.dist); }
 }
 
 /* ---------- Scanner ---------- */
+const sheetArmed = () => Date.now() - (+sheet.dataset.openedAt || 0) > 700;
 const scanner = $('#scanner'), video = $('#video'), statusEl = $('#scanStatus');
 let stream = null, scanning = false, paused = false, torchOn = false;
 const say = t => { statusEl.textContent = t; };
@@ -465,7 +501,7 @@ async function scanLoop() {
   const recent = [];
   let shown = null, misses = 0, frames = 0;
   while (scanning) {
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 60));
     if (paused || !video.videoWidth) { recent.length = 0; continue; }
     try {
       const frame = grabGuide(), W = frame.width, H = frame.height;
@@ -476,7 +512,7 @@ async function scanLoop() {
       // A carta recém-mostrada só conta de novo depois de sair do quadro.
       if (!seen) shown = null;
       if (seen && top.id === shown) { say('Tire esta carta e enquadre a próxima'); continue; }
-      const sure = seen && (top.dist <= 27 || (top.dist <= 33 && recent.includes(top.id)));
+      const sure = seen && (top.dist <= 18 || recent.includes(top.id));
       recent.push(seen ? top.id : null);
       if (recent.length > 3) recent.shift();
       if (sure) {
@@ -513,6 +549,7 @@ function showMatch({ cards, read }, resume = true) {
         <button class="btn alt" type="button" data-close>${resume ? 'Continuar escaneando' : 'Fechar'}</button></div>`;
     $$('[data-alt]', sheet).forEach(b => b.onclick = () => { idx = +b.dataset.alt; draw(); });
     $('[data-add]', sheet).onclick = () => {
+      if (!sheetArmed()) return;
       store.lastJa = isJa(detail.id);
       setQty(detail, detail.variants[0] || 'normal', 1);
       toast(`${detail.name} adicionada`);
@@ -591,7 +628,7 @@ document.addEventListener('click', async e => {
   else if (d.scope) { store.scope[route.setId] = d.scope; save(); render(); }
   else if (d.currency) { store.currency = d.currency; save(); refreshFx(); render(); }
   else if (d.manual !== undefined) manualForm();
-  else if (d.step && sheetCard) { setQty(sheetCard, d.variant, +d.step); $('#variants').innerHTML = variantRows(sheetCard); }
+  else if (d.step && sheetCard && sheetArmed()) { setQty(sheetCard, d.variant, +d.step); $('#variants').innerHTML = variantRows(sheetCard); }
   else if (b.id === 'scanBtn') openScanner();
   else if (b.id === 'scanClose') closeScanner();
   else if (b.id === 'torch') {

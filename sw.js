@@ -1,4 +1,4 @@
-const SHELL = 'fichario-shell-8', RUNTIME = 'fichario-runtime-1';
+const SHELL = 'fichario-shell-9', RUNTIME = 'fichario-runtime-1';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'views.js', 'desk.js', 'sync.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon-180.png', 'data/index.json', 'data/hashes.bin'];
 
 self.addEventListener('install', e => {
