@@ -271,20 +271,13 @@ details summary { padding: 8px 0; color: var(--muted); font-size: 14px; font-wei
 .scan-bottom { position: absolute; inset: auto 16px calc(env(safe-area-inset-bottom, 0px) + 28px); text-align: center; }
 .ghost { display: inline-block; padding: 12px 22px; border-radius: 14px; background: rgb(255 255 255 / .14); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); font-weight: 600; cursor: pointer; }
 
-/* Nome da marca: dourado com contorno escuro, como na referência, e "TCG TRACKER" em ciano */
-.wordmark { display: grid; justify-items: start; line-height: 1; }
-.wordmark b { font: 400 30px "Lilita One", var(--display); letter-spacing: .02em; color: transparent; background: linear-gradient(180deg, #fff1a6, #ffc83d 48%, #e07b12); -webkit-background-clip: text; background-clip: text; -webkit-text-stroke: 1.2px #3a1c00; filter: drop-shadow(0 2px 0 #0a0e1f) drop-shadow(0 0 12px rgb(255 200 61 / .3)); }
-.wordmark small { margin-top: 3px; padding-left: 2px; font: 700 9.5px var(--mono); letter-spacing: .34em; color: #5ee7ff; text-shadow: 0 0 8px rgb(94 231 255 / .55); }
-.brand-row { display: flex; align-items: center; gap: 10px; }
-.brand-row img { width: 42px; height: 42px; }
-.brand-row .wordmark b { font-size: 24px; }
+/* Logo da marca (icons/logo.webp, a partir da arte enviada) */
+.brand-row { display: flex; justify-content: center; margin: -6px 0 -10px; }
+.brand-row .logo { width: min(78vw, 300px); height: auto; }
 
 /* Abertura: o símbolo aparece enquanto o app monta a primeira tela */
 #splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 14px; background: radial-gradient(70% 50% at 50% 42%, #2b3666, var(--bg)); transition: opacity .35s ease, visibility .35s; }
-#splash img { width: 150px; height: 150px; filter: drop-shadow(0 18px 30px rgb(0 0 0 / .5)); }
-#splash .wordmark { justify-items: center; }
-#splash .wordmark b { font-size: 40px; }
-#splash .wordmark small { font-size: 11px; }
+#splash img { width: min(84vw, 460px); height: auto; }
 #splash.out { opacity: 0; visibility: hidden; }
 @media (prefers-reduced-motion: no-preference) { #splash img { animation: pop .5s cubic-bezier(.2, .9, .3, 1.3); } @keyframes pop { from { transform: scale(.7) rotate(-12deg); opacity: 0; } } }
 
@@ -308,9 +301,8 @@ details summary { padding: 8px 0; color: var(--muted); font-size: 14px; font-wei
   /* Barra lateral */
   #tabs { inset: 0 auto 0 0; width: 236px; max-width: none; height: auto; margin: 0; padding: 22px 14px 16px; grid-template-columns: 1fr; grid-template-rows: auto auto repeat(5, min-content) 1fr auto; align-content: stretch; gap: 2px;
     border: 0; border-right: 1px solid var(--line); border-radius: 0; background: var(--bg-2); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-  #brand { order: -2; grid-template-columns: 46px 1fr; align-items: center; gap: 10px; padding: 0 6px 18px; }
-  #brand img { width: 46px; height: 46px; }
-  #brand .wordmark b { font-size: 25px; }
+  #brand { order: -2; display: block; padding: 0 0 14px; }
+  #brand .logo { width: 100%; height: auto; }
   #tabs button { grid-template-columns: 22px 1fr; justify-items: start; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 500; }
   #tabs button:hover { background: var(--surface); color: var(--ink); }
   #tabs button.on { background: var(--surface-2); color: var(--ink); font-weight: 600; }

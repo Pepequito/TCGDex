@@ -103,7 +103,7 @@ async function renderHome() {
   const top = [...cards].sort((a, b) => valueOf(b) - valueOf(a)).slice(0, 8);
   const recent = [...cards].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8);
   view.innerHTML = `
-    <div class="brand-row"><img src="icons/icon.svg" alt=""><span class="wordmark"><b>BOOSTERZ</b><small>TCG TRACKER</small></span></div>
+    <div class="brand-row"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"></div>
     <div class="topbar"><div class="hello"><span>Olá, treinador</span><b>${esc(trainerName())}</b></div>
       <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil">${avatar()}</button></div>
     <div class="hero"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
