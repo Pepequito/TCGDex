@@ -1,5 +1,5 @@
-const SHELL = 'fichario-shell-1', RUNTIME = 'fichario-runtime-1';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'data/index.json', 'data/hashes.bin'];
+const SHELL = 'fichario-shell-2', RUNTIME = 'fichario-runtime-1';
+const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'sync.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon-180.png', 'data/index.json', 'data/hashes.bin'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -30,6 +30,8 @@ async function networkFirst(req) {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const { hostname } = new URL(e.request.url);
-  const stable = hostname === 'assets.tcgdex.net' || hostname === 'cdn.jsdelivr.net' || hostname === 'fonts.gstatic.com' || hostname === 'tessdata.projectnaptha.com';
+  // Login e Firestore usam conexões longas: passam direto, sem cache.
+  if (/(^|\.)(googleapis\.com|firebaseapp\.com|google\.com)$/.test(hostname) && hostname !== 'fonts.googleapis.com') return;
+  const stable = hostname === 'assets.tcgdex.net' || hostname === 'cdn.jsdelivr.net' || hostname === 'fonts.gstatic.com' || hostname === 'www.gstatic.com' || hostname === 'tessdata.projectnaptha.com';
   e.respondWith(stable ? cacheFirst(e.request) : networkFirst(e.request));
 });

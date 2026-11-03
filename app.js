@@ -130,8 +130,10 @@ function setQty(card, variant, delta) {
   c.prices = card.prices || c.prices;
   c.qty[variant] = Math.max(0, (c.qty[variant] || 0) + delta);
   if (!c.qty[variant]) delete c.qty[variant];
+  c.updatedAt = Date.now();
   if (!Object.keys(c.qty).length) delete store.cards[card.id];
   save();
+  window.Sync?.changed(card.id);
 }
 async function refreshPrices(onStep) {
   const cards = list();
@@ -179,6 +181,7 @@ async function renderHome() {
     <div class="ledger"><span class="label">Valor da coleção</span>
       <span class="value num-display">${money(total)}</span>
       <span class="meta">${copies} ${copies === 1 ? 'carta' : 'cartas'} · ${cards.length} ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div>
+    ${window.Sync?.nudge() || ''}
     ${cards.length ? `
     <div class="section"><div class="section-head"><h2>Seus sets</h2></div><div class="rows" id="mySets"><div class="row muted">Carregando…</div></div></div>
     <div class="section"><div class="section-head"><h2>Mais valiosas</h2></div>
@@ -264,6 +267,7 @@ async function searchCards(q) {
 function renderSettings() {
   const when = store.pricedAt ? new Date(store.pricedAt).toLocaleDateString('pt-BR') : 'nunca';
   view.innerHTML = `<h1>Ajustes</h1>
+    <div class="section" id="account"></div>
     <div class="section"><h2>Moeda</h2>
       <div class="seg" role="group" aria-label="Moeda">${['BRL', 'USD', 'EUR'].map(c => `<button type="button" data-currency="${c}" class="${store.currency === c ? 'on' : ''}">${c}</button>`).join('')}</div>
       <p class="muted small">Os preços vêm da TCGplayer (EUA) e da Cardmarket (Europa) e são convertidos pela cotação do dia. O mercado brasileiro pode praticar valores diferentes.${store.fx ? ` US$ 1 = R$ ${store.fx.BRL.toFixed(2).replace('.', ',')}.` : ''}</p></div>
@@ -273,8 +277,9 @@ function renderSettings() {
     <div class="section"><h2>Backup</h2>
       <button id="exportBtn" class="btn alt" type="button">Exportar coleção</button>
       <button id="importBtn" class="btn alt" type="button">Importar backup</button>
-      <p class="muted small">A coleção fica só neste iPhone. Exporte de vez em quando e guarde o arquivo no iCloud Drive.</p></div>
+      <p class="muted small">Sem conta, a coleção fica só neste iPhone. Exporte de vez em quando e guarde o arquivo no iCloud Drive.</p></div>
     <p class="muted small">Dados de cartas: TCGdex. Reconhecimento feito no próprio aparelho. Projeto pessoal, sem vínculo com The Pokémon Company ou Nintendo.</p>`;
+  window.Sync?.paint();
 }
 
 /* ---------- Painel da carta ---------- */
@@ -429,7 +434,7 @@ const confident = r => r.cards.length && (r.read.number ? r.cards[0].score >= .5
 
 /* ---------- Reconhecimento pela arte ---------- */
 // Mesma conta de tools/export-index.js: DCT da região da arte em 32x32, 128 bits em torno da mediana.
-const S = 32, BITS = 128, ART = { x: .08, y: .11, w: .84, h: .36 }, MATCH_MAX = 31;
+const S = 32, BITS = 128, ART = { x: .08, y: .11, w: .84, h: .36 }, MATCH_MAX = 36, TILTS = [0, -4, 4];
 const zig = (() => {
   const z = [];
   for (let s = 1; z.length < BITS; s++) for (let u = 0; u <= s; u++) { const v = s - u; if (u < S && v < S) z.push([u, v]); }
@@ -466,7 +471,7 @@ function artHash(src, x, y, w, h, out) {
 }
 const pop = x => { x -= (x >>> 1) & 0x55555555; x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return (((x + (x >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24; };
 // O enquadramento nunca é exato: testa pequenos deslocamentos e zooms e fica com a menor distância.
-async function matchArt(src, W, H, limit = 6) {
+async function matchArt(src, W, H, rot = 0, limit = 6) {
   const { hashes, cards, paths } = await artIndex();
   const n = cards.length, best = new Uint8Array(n).fill(255), q = new Uint32Array(4);
   // Reduz o quadro uma vez só: é o que torna as 245 tentativas rápidas num iPhone.
@@ -474,8 +479,15 @@ async function matchArt(src, W, H, limit = 6) {
   small.width = 180; small.height = 252;
   const sg = small.getContext('2d', { willReadFrequently: true });
   sg.imageSmoothingQuality = 'high';
+  sg.translate(90, 126); sg.rotate(rot * Math.PI / 180); sg.translate(-90, -126);
   sg.drawImage(src, 0, 0, W, H, 0, 0, 180, 252);
-  for (const z of [.92, .96, 1, 1.04, 1.08]) for (let ox = -.06; ox < .07; ox += .02) for (let oy = -.06; oy < .07; oy += .02) {
+  // Mesa lisa ou papel em branco não têm arte para comparar.
+  const px = sg.getImageData(30, 40, 120, 90).data;
+  let sum = 0, sq = 0;
+  for (let i = 0; i < px.length; i += 4) { const v = px[i + 1]; sum += v; sq += v * v; }
+  const count = px.length / 4;
+  if (Math.sqrt(sq / count - (sum / count) ** 2) < 14) return [{ id: null, dist: 99 }];
+  for (const z of [.86, .93, 1, 1.07, 1.15]) for (let ox = -.075; ox < .08; ox += .025) for (let oy = -.075; oy < .08; oy += .025) {
     const w = 180 * ART.w * z, h = 252 * ART.h * z;
     artHash(small, 180 * (ART.x + ox + (1 - z) * ART.w / 2), 252 * (ART.y + oy + (1 - z) * ART.h / 2), w, h, q);
     for (let i = 0, o = 0; i < n; i++, o += 4) {
@@ -511,7 +523,12 @@ async function openScanner() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
     video.srcObject = stream; await video.play();
-    const caps = stream.getVideoTracks()[0].getCapabilities?.();
+    const track = stream.getVideoTracks()[0], caps = track.getCapabilities?.();
+    // Com zoom, a carta fica mais longe da lente, na distância em que o iPhone consegue focar.
+    const tune = {};
+    if (caps?.zoom?.max >= 1.5) tune.zoom = Math.min(2, caps.zoom.max);
+    if (caps?.focusMode?.includes('continuous')) tune.focusMode = 'continuous';
+    if (Object.keys(tune).length) await track.applyConstraints({ advanced: [tune] }).catch(() => {});
     $('#torch').hidden = !caps?.torch;
     say('Enquadre a carta inteira e mantenha parado');
     scanLoop();
@@ -540,20 +557,23 @@ function grabGuide() {
 async function scanLoop() {
   if (scanning) return;
   scanning = true;
-  let last = null, shown = null, misses = 0, frames = 0;
+  const recent = [];
+  let shown = null, misses = 0, frames = 0;
   while (scanning) {
     await new Promise(r => setTimeout(r, 250));
-    if (paused || !video.videoWidth) { last = null; continue; }
+    if (paused || !video.videoWidth) { recent.length = 0; continue; }
     try {
       const frame = grabGuide(), W = frame.width, H = frame.height;
-      let cards = await matchArt(frame, W, H);
+      // A carta raramente fica reta: cada quadro testa um ângulo.
+      let cards = await matchArt(frame, W, H, TILTS[frames % TILTS.length]);
       if (!scanning || paused) continue;
       const top = cards[0], seen = top.dist <= MATCH_MAX;
       // A carta recém-mostrada só conta de novo depois de sair do quadro.
       if (!seen) shown = null;
       if (seen && top.id === shown) { say('Tire esta carta e enquadre a próxima'); continue; }
-      const sure = seen && (top.id === last || top.dist <= 25);
-      last = seen ? top.id : null;
+      const sure = seen && (top.dist <= 27 || (top.dist <= 33 && recent.includes(top.id)));
+      recent.push(seen ? top.id : null);
+      if (recent.length > 3) recent.shift();
       if (sure) {
         misses = 0; say('Carta encontrada'); shown = top.id;
         cards = await rerank(cards, frame, W, H);
@@ -561,7 +581,7 @@ async function scanLoop() {
         continue;
       }
       misses++;
-      say(misses > 12 ? 'Aproxime a carta e evite reflexo sobre a arte' : 'Enquadre a carta inteira e mantenha parado');
+      say(`${misses > 12 ? 'Encaixe a carta na moldura e evite reflexo sobre a arte' : 'Encaixe a carta na moldura e mantenha parado'} (${top.dist})`);
       // Carta lançada depois de o banco ser gerado: o número impresso ainda resolve.
       if (++frames % 16 === 0) {
         const r = await identify(frame, W, H);
@@ -606,14 +626,14 @@ async function fromPhoto(file) {
   c.width = Math.round(bmp.width * fit); c.height = Math.round(bmp.height * fit);
   c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
   let best = await matchArt(c, c.width, c.height), bestSrc = c;
-  for (const k of [1, .85, .7]) {
+  for (const tilt of TILTS) for (const k of [1, .85, .7]) {
     const w = Math.round(Math.min(c.width, c.height * 63 / 88) * k), h = Math.round(w * 88 / 63);
     const inner = document.createElement('canvas'); inner.width = w; inner.height = h;
     inner.getContext('2d').drawImage(c, (c.width - w) / 2, (c.height - h) / 2, w, h, 0, 0, w, h);
-    const m = await matchArt(inner, w, h);
+    const m = await matchArt(inner, w, h, tilt);
     if (m[0].dist < best[0].dist) { best = m; bestSrc = inner; }
   }
-  if (best[0].dist <= MATCH_MAX + 3) { showMatch({ cards: await rerank(best, bestSrc, bestSrc.width, bestSrc.height) }); return; }
+  if (best[0].dist <= MATCH_MAX) { showMatch({ cards: await rerank(best, bestSrc, bestSrc.width, bestSrc.height) }); return; }
   const r = await identify(bestSrc, bestSrc.width, bestSrc.height);
   if (r.cards.length) showMatch(r);
   else { paused = false; say('Não reconheci essa foto. Tente de mais perto ou use Buscar.'); }
@@ -635,7 +655,10 @@ async function importBackup(file) {
   try {
     const data = JSON.parse(await file.text());
     if (data.app !== 'fichario' || typeof data.cards !== 'object') throw 0;
+    const now = Date.now();
+    for (const c of Object.values(data.cards)) c.updatedAt = now;
     Object.assign(store.cards, data.cards); save(); render();
+    window.Sync?.changedAll(Object.keys(data.cards));
     toast(`${Object.keys(data.cards).length} cartas importadas`);
   } catch { toast('Esse arquivo não é um backup do Fichário.'); }
 }
