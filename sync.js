@@ -18,8 +18,9 @@ window.Sync = (() => {
     'auth/too-many-requests': 'Muitas tentativas. Espere alguns minutos.',
     'auth/popup-closed-by-user': 'O login com Google foi cancelado.',
     'auth/unauthorized-domain': 'Este site ainda não foi autorizado no Firebase.',
+    'auth/operation-not-allowed': 'Essa forma de login não está ativada no Firebase.',
   };
-  const explain = e => ERRORS[e?.code] || 'Não consegui concluir. Tente de novo.';
+  const explain = e => ERRORS[e?.code] || `Não consegui concluir (${e?.code || 'erro desconhecido'}).`;
   const cardsRef = () => db.collection('users').doc(user.uid).collection('cards');
   const clean = c => JSON.parse(JSON.stringify(c));
 
