@@ -44,7 +44,12 @@ const getSets = () => once('sets', async () => {
     id: 'ja:' + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo,
   })).reverse());
 });
-const getSet = id => once('set:' + id, async () => {
+// Cartas cadastradas à mão ficam num set próprio, montado a partir da coleção.
+const customSet = () => {
+  const cards = Object.values(store.cards).filter(c => c.setId === 'custom');
+  return { id: 'custom', name: 'Cartas cadastradas', official: cards.length, total: cards.length, abbr: '', tcgOnline: '', cards };
+};
+const getSet = id => id === 'custom' ? Promise.resolve(customSet()) : once('set:' + id, async () => {
   if (isJa(id)) {
     const ja = await getJSON(`${API}/ja/sets/${jaRaw(id)}`);
     return {
@@ -103,7 +108,7 @@ function extractPrices(card) {
   }
   return out;
 }
-const imageUrl = (base, q = 'low') => base ? `${base}/${q}.webp` : '';
+const imageUrl = (base, q = 'low') => !base ? '' : base.startsWith('data:') ? base : `${base}/${q}.webp`;
 function imgTag(c, q = 'low', alt = '') {
   if (!c.image) return `<div class="noimg">${esc(c.name)}</div>`;
   const fallback = c.imageEn && c.imageEn !== c.image ? imageUrl(c.imageEn, q) : '';
@@ -136,7 +141,24 @@ function money(usd) {
 }
 const list = () => Object.values(store.cards);
 const qtyOf = c => Object.values(c.qty).reduce((a, b) => a + b, 0);
-const valueOf = c => Object.entries(c.qty).reduce((a, [v, n]) => a + n * (toUsd(c.prices?.[v]) || 0), 0);
+// O valor digitado está em reais e vale para todas as cópias da carta, no lugar do preço automático.
+const customUsd = brl => brl / (store.fx?.BRL || 5.4);
+const valueOf = c => c.custom != null ? qtyOf(c) * customUsd(c.custom)
+  : Object.entries(c.qty).reduce((a, [v, n]) => a + n * (toUsd(c.prices?.[v]) || 0), 0);
+function setCustom(id, brl) {
+  const c = store.cards[id];
+  if (!c) return;
+  if (brl == null) delete c.custom; else c.custom = brl;
+  c.updatedAt = Date.now();
+  save();
+  window.Sync?.changed(id);
+}
+const parseBrl = t => {
+  const v = parseFloat(String(t).replace(/[^\d,.]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+  return Number.isFinite(v) ? v : null;
+};
+const brlText = v => v == null ? '' : v.toFixed(2).replace('.', ',');
+const ligaUrl = c => `https://www.ligapokemon.com.br/?view=cards/search&card=${encodeURIComponent(c.nameEn || c.name)}`;
 
 function setQty(card, variant, delta) {
   let c = store.cards[card.id];
@@ -216,7 +238,9 @@ async function renderHome() {
     const box = $('#mySets'); if (!box) return;
     const recent = {};
     for (const c of cards) recent[c.setId] = Math.max(recent[c.setId] || 0, c.addedAt);
-    box.innerHTML = sets.filter(s => owned[s.id]).sort((a, b) => recent[b.id] - recent[a.id]).map(s => progressRow(s, owned[s.id])).join('');
+    const mine = sets.filter(s => owned[s.id]);
+    if (owned.custom) mine.push(customSet());
+    box.innerHTML = mine.sort((a, b) => recent[b.id] - recent[a.id]).map(s => progressRow(s, owned[s.id])).join('');
   } catch { const box = $('#mySets'); if (box) box.innerHTML = '<div class="row muted">Sem conexão. Tente de novo em instantes.</div>'; }
 }
 async function renderSets() {
@@ -267,7 +291,8 @@ async function renderSet() {
 function renderSearch() {
   view.innerHTML = `<h1>Buscar carta</h1>
     <form id="searchForm"><input id="searchInput" class="field" type="search" enterkeyhint="search" placeholder="Nome da carta, como Charizard" value="${esc(route.q)}" autocomplete="off"></form>
-    <div id="searchOut"></div>`;
+    <div id="searchOut"></div>
+    <button class="btn alt" type="button" data-manual>Não achou? Cadastrar carta manualmente</button>`;
   if (route.results) drawResults(route.results);
 }
 function drawResults(cards) {
@@ -314,15 +339,53 @@ function closeSheet() {
   sheet.hidden = sheetBack.hidden = true;
   const fn = onSheetClose; onSheetClose = null; fn?.(); render();
 }
+function cardExtras(card) {
+  const own = store.cards[card.id];
+  const liga = `<a class="btn alt" href="${esc(ligaUrl(card))}" target="_blank" rel="noopener">Ver na Liga Pokémon</a>`;
+  if (!own) return liga;
+  return `${liga}<form id="valueForm" class="value-form"><label for="valueInput" class="small muted">Meu valor por carta (R$)</label>
+    <input id="valueInput" class="field" inputmode="decimal" autocomplete="off" placeholder="Usar preço automático" value="${esc(brlText(own.custom))}">
+    <button class="btn alt" type="submit">Salvar valor</button></form>`;
+}
+function manualForm() {
+  openSheet(`<h2>Cadastrar carta</h2><form id="manualForm" class="section">
+    <input id="mName" class="field" placeholder="Nome, como Mega Zeraora ex" autocomplete="off" required>
+    <input id="mSet" class="field" placeholder="Set, como Promos MEP" autocomplete="off">
+    <input id="mNumber" class="field" placeholder="Número, como 089" autocomplete="off">
+    <input id="mValue" class="field" inputmode="decimal" placeholder="Valor em R$ (opcional)" autocomplete="off">
+    <label class="btn alt" for="mPhoto" id="mPhotoLabel">Adicionar foto (opcional)</label>
+    <input id="mPhoto" type="file" accept="image/*" hidden>
+    <button class="btn" type="submit">Adicionar à coleção</button>
+    <button class="btn alt" type="button" data-close>Cancelar</button></form>`);
+}
+// Foto pequena: ela viaja junto com a carta para a nuvem.
+async function photoData(file) {
+  const bmp = await createImageBitmap(file), k = Math.min(1, 320 / bmp.width);
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', .7);
+}
+async function saveManual() {
+  const name = $('#mName').value.trim(); if (!name) return;
+  const file = $('#mPhoto').files[0];
+  const image = file ? await photoData(file).catch(() => '') : '';
+  const id = 'custom:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const card = { id, localId: $('#mNumber').value.trim() || '—', name, image, imageEn: image, rarity: '', setId: 'custom', setName: $('#mSet').value.trim() || 'Cartas cadastradas', prices: {}, variants: ['normal'] };
+  setQty(card, 'normal', 1);
+  setCustom(id, parseBrl($('#mValue').value));
+  toast(`${name} adicionada`);
+  closeSheet();
+}
 function variantRows(card) {
   const own = store.cards[card.id]?.qty || {};
   const vs = card.variants.length ? card.variants : ['normal'];
   return vs.map(v => {
-    const p = card.prices?.[v], usd = toUsd(p);
+    const p = card.prices?.[v], custom = store.cards[card.id]?.custom, usd = custom != null ? customUsd(custom) : toUsd(p);
     const src = [p?.usd != null ? `US$ ${p.usd.toFixed(2)}` : '', p?.eur ? `€ ${p.eur.toFixed(2)}` : ''].filter(Boolean).join(' · ');
     return `<div class="variant"><b>${VARIANTS[v].label}</b>
       <div class="stepper"><button type="button" data-step="-1" data-variant="${v}" aria-label="Remover ${VARIANTS[v].label}">−</button><span>${own[v] || 0}</span><button type="button" data-step="1" data-variant="${v}" aria-label="Adicionar ${VARIANTS[v].label}">+</button></div>
-      <span class="prices">${usd != null ? `${money(usd)} <span class="small">(${src})</span>` : 'Sem preço disponível'}</span></div>`;
+      <span class="prices">${custom != null ? `${money(usd)} <span class="small">(seu valor)</span>` : usd != null ? `${money(usd)} <span class="small">(${src})</span>` : 'Sem preço disponível'}</span></div>`;
   }).join('');
 }
 function cardHead(card) {
@@ -334,9 +397,10 @@ let sheetCard = null;
 async function showCard(id) {
   openSheet('<p class="muted">Buscando carta e preço…</p>');
   try {
-    sheetCard = await getCard(id);
+    const own = store.cards[id];
+    sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>
+    sheet.innerHTML = `${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${cardExtras(sheetCard)}
       <button class="btn alt" type="button" data-close>Fechar</button>`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
@@ -637,7 +701,7 @@ function showMatch({ cards, read }, resume = true) {
     sheetCard = detail;
     const alts = cards.length > 1 ? `<div class="section"><span class="muted small">Não é essa? Escolha outra:</span>
       <div class="alts">${cards.map((c, i) => `<button type="button" data-alt="${i}" class="${i === idx ? 'on' : ''}" aria-label="${esc(c.name)}${isJa(c.id) ? ', japonesa' : ''}">${imgTag(c)}${isJa(c.id) ? '<span class="lang">JP</span>' : ''}</button>`).join('')}</div></div>` : '';
-    sheet.innerHTML = `${cardHead(detail)}${alts}<div id="variants">${variantRows(detail)}</div>
+    sheet.innerHTML = `${cardHead(detail)}${alts}<div id="variants">${variantRows(detail)}</div>${cardExtras(detail)}
       <div class="sheet-actions">
         <button class="btn" type="button" data-add>Adicionar ${esc((detail.variants.length ? VARIANTS[detail.variants[0]].label : 'Normal').toLowerCase())}</button>
         <button class="btn alt" type="button" data-close>${resume ? 'Continuar escaneando' : 'Fechar'}</button></div>`;
@@ -718,6 +782,7 @@ document.addEventListener('click', async e => {
   else if (d.region) go({ region: d.region });
   else if (d.scope) { store.scope[route.setId] = d.scope; save(); render(); }
   else if (d.currency) { store.currency = d.currency; save(); refreshFx(); render(); }
+  else if (d.manual !== undefined) manualForm();
   else if (d.step && sheetCard) { setQty(sheetCard, d.variant, +d.step); $('#variants').innerHTML = variantRows(sheetCard); }
   else if (b.id === 'scanBtn') openScanner();
   else if (b.id === 'scanClose') closeScanner();
@@ -736,6 +801,13 @@ document.addEventListener('click', async e => {
 sheetBack.addEventListener('click', closeSheet);
 document.addEventListener('submit', async e => {
   e.preventDefault();
+  if (e.target.id === 'manualForm') return saveManual();
+  if (e.target.id === 'valueForm') {
+    const text = $('#valueInput').value.trim();
+    setCustom(sheetCard.id, text ? parseBrl(text) : null);
+    $('#variants').innerHTML = variantRows(sheetCard);
+    return toast(text ? 'Valor salvo' : 'Voltando ao preço automático');
+  }
   if (e.target.id !== 'searchForm') return;
   const q = $('#searchInput').value.trim(); if (!q) return;
   route.q = q; $('#searchOut').innerHTML = '<p class="muted">Buscando…</p>';
@@ -746,6 +818,9 @@ $('#photoInput').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
   try { await fromPhoto(f); } catch { paused = false; say('Não consegui ler essa foto.'); }
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'mPhoto' && e.target.files[0]) $('#mPhotoLabel').textContent = 'Foto escolhida';
 });
 $('#importInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f); });
 
