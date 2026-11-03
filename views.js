@@ -82,7 +82,7 @@ function railCard(c, label) {
 }
 // Sem logo oficial, vale o símbolo do set; sem símbolo, o código impresso nas cartas ou as iniciais.
 const setCode = s => isJa(s.id) ? jaRaw(s.id) : s.name.split(/\s+/).filter(w => /^[\p{L}\d]/u.test(w) && w.length > 2).map(w => w[0]).join('').slice(0, 4).toUpperCase();
-const setArt = s => s.logo ? `${s.logo}.webp` : s.symbol ? `${s.symbol}.png` : '';
+const setArt = s => s.logoUrl || (s.logo ? `${s.logo}.webp` : '');
 function setTile(s, have) {
   const size = s.total || s.official || 1, pct = Math.min(100, have / size * 100), art = setArt(s);
   return `<button class="set-tile${have >= size ? ' done' : ''}" type="button" data-set="${esc(s.id)}">

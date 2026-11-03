@@ -35,11 +35,11 @@ const isPocket = id => /^(A|B)\d+[a-z]?$|^P-/.test(id);
 
 // A lista em inglês é a mais completa; os nomes em português entram por cima quando existem.
 const getSets = () => once('sets', async () => {
-  const [en, pt, ja] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON(`${API}/ja/sets`).catch(() => [])]);
+  const [en, pt, ja, extra] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON(`${API}/ja/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({}))]);
   const ptById = new Map(pt.map(s => [s.id, s]));
   return en.filter(s => !isPocket(s.id)).map(s => ({
     id: s.id, nameEn: s.name, name: (ptById.get(s.id)?.name || s.name).trim(),
-    official: s.cardCount.official, total: s.cardCount.total, logo: ptById.get(s.id)?.logo || s.logo,
+    official: s.cardCount.official, total: s.cardCount.total, logo: ptById.get(s.id)?.logo || s.logo, logoUrl: extra[s.id],
     symbol: s.symbol || ptById.get(s.id)?.symbol,
     serie: /assets\.tcgdex\.net\/(?:en|pt|univ)\/([^/]+)\//.exec(s.logo || s.symbol || '')?.[1] || /^(me|swsh|sv|sm|xy|bw|hgss|dp|pl|ex|neo|base|gym|ecard)/.exec(s.id)?.[1] || '',
   })).reverse().concat(ja.filter(s => !isPocket(s.id)).map(s => ({
@@ -301,17 +301,18 @@ function crop(src, x, y, w, h, scale, invert = false) {
   g.putImageData(img, 0, 0);
   return c;
 }
-// Só dígitos: a barra às vezes vira outro número, mas o número da carta continua lá dentro do texto.
-async function readDigits(src, W, H) {
-  const w = await ocrWorker();
+// Código impresso no canto, como "DRI PT 106/182". A sigla e o total dizem a coleção; o número, a carta.
+// Só dígitos em parte das leituras: a barra às vezes vira outro número, mas os números continuam lá dentro do texto.
+async function readCode(src, W, H) {
+  const w = await ocrWorker(), LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/', DIGITS = '0123456789/';
   let text = '';
-  for (const [x, y, cw, ch, psm] of [[.04, .91, .36, .065, '6'], [.04, .91, .36, .065, '11'], [.02, .895, .45, .09, '6']]) {
-    await w.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: '0123456789/' });
+  for (const [x, y, cw, ch, psm, wl] of [[.02, .895, .5, .09, '6', LETTERS], [.04, .91, .36, .065, '6', DIGITS], [.04, .91, .36, .065, '11', DIGITS], [.5, .91, .48, .075, '6', DIGITS]]) {
+    await w.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: wl });
     const { data } = await w.recognize(crop(src, W * x, H * y, W * cw, H * ch, Math.min(5, 1600 / (W * cw))));
     text += ' ' + data.text;
   }
   await w.setParameters({ tessedit_char_whitelist: '' });
-  return text;
+  return text.toUpperCase();
 }
 // `src` é o recorte da carta. O número pode estar no canto esquerdo (atuais) ou direito (antigas).
 async function readCard(src, W, H) {
@@ -439,16 +440,39 @@ async function matchArt(src, W, H, rot = 0, limit = 6) {
     return { id, localId, name: id, image, imageEn: image, dist: best[i] };
   });
 }
-// Sem número legível, entre artes empatadas vale o idioma da última carta adicionada.
+// Sem código legível, entre artes empatadas vale o idioma da última carta adicionada.
 const preferred = (c, cards) => +(cards[0].dist <= 28 && c.dist - cards[0].dist <= 2 && isJa(c.id) === !!store.lastJa);
-// Quando duas cartas têm arte quase igual (reimpressões e versões japonesas), o número impresso decide.
+const setIdOf = id => id.replace(/-[^-]+$/, '');
+// Nome, sigla, total oficial e logo de cada coleção candidata.
+async function setFacts(ids) {
+  const sets = await getSets().catch(() => []), out = {};
+  await Promise.all([...new Set(ids.map(setIdOf))].map(async sid => {
+    const meta = sets.find(x => x.id === sid);
+    let abbr = '', cards = [];
+    try { const full = await getSet(sid); abbr = full.abbr || ''; cards = full.cards; } catch { /* sem sigla */ }
+    out[sid] = { name: meta?.name || sid, official: meta?.official || 0, abbr, art: meta ? setArt(meta) : '', cards };
+  }));
+  return out;
+}
+// Mesma arte em várias coleções (reimpressões, versões japonesas): o código impresso decide qual é.
 async function rerank(cards, src, W, H) {
-  if (cards.length < 2 || cards[1].dist - cards[0].dist > 5) return cards;
-  try {
-    const printed = await readDigits(src, W, H);
-    const near = c => { const n = c.localId.replace(/^0+/, ''); return /^\d{2,}$/.test(n) && printed.includes(n) && c.dist - cards[0].dist <= 8; };
-    return [...cards].sort((a, b) => near(b) - near(a) || preferred(b, cards) - preferred(a, cards) || a.dist - b.dist);
-  } catch { return [...cards].sort((a, b) => preferred(b, cards) - preferred(a, cards) || a.dist - b.dist); }
+  const likely = cards.filter(c => c.dist <= MATCH_MAX);
+  if (likely.length < 2) return cards;
+  const facts = await setFacts(likely.map(c => c.id));
+  // A mesma carta reimpressa em outra coleção: arte quase igual ou o mesmo nome.
+  const nameOf = c => (facts[setIdOf(c.id)]?.cards || []).find(x => x.id === c.id)?.nameEn || '';
+  const top = nameOf(cards[0]);
+  const close = likely.filter(c => c === cards[0] || c.dist - cards[0].dist <= 6 || (top && nameOf(c) === top));
+  if (close.length < 2) return cards;
+  const text = await readCode(src, W, H).catch(() => '');
+  const score = c => {
+    const f = facts[setIdOf(c.id)] || {}, n = c.localId.replace(/^0+/, '');
+    return (/^\d{2,}$/.test(n) && text.includes(n) ? 1 : 0) + (f.official >= 10 && text.includes(String(f.official)) ? 1 : 0) + (f.abbr?.length >= 3 && text.includes(f.abbr) ? 2 : 0);
+  };
+  const scored = close.map(c => ({ c, s: score(c) })).sort((a, b) => b.s - a.s || preferred(b.c, cards) - preferred(a.c, cards) || a.c.dist - b.c.dist);
+  const resolved = scored[0].s >= 2 && scored[0].s > (scored[1]?.s ?? -1);
+  const ordered = [...scored.map(x => x.c), ...cards.filter(c => !close.includes(c))];
+  return Object.assign(ordered, { close: close.length, resolved: resolved ? scored[0].c.id : null, facts });
 }
 
 /* ---------- Scanner ---------- */
@@ -531,33 +555,47 @@ async function scanLoop() {
     } catch { say('Sem conexão com o banco de cartas.'); await new Promise(r => setTimeout(r, 1500)); }
   }
 }
-function showMatch({ cards, read }, resume = true) {
+// Quando a mesma arte existe em mais de uma coleção, nada é adicionado sem a coleção estar escolhida.
+function showMatch({ cards }, resume = true) {
   navigator.vibrate?.(30);
-  let idx = 0, detail = null;
+  const same = cards.close || 1, facts = cards.facts || {};
+  let idx = 0, picked = same < 2 || !!cards.resolved, detail = null;
   const onDone = () => { paused = !resume; if (resume) say('Enquadre a próxima carta'); };
+  const option = (c, i) => {
+    const f = facts[setIdOf(c.id)] || {}, code = [f.abbr, c.localId + (f.official ? '/' + f.official : '')].filter(Boolean).join(' · ');
+    return `<button type="button" class="set-option${picked && i === idx ? ' on' : ''}" data-alt="${i}">
+      <span class="mini-logo${f.art ? '' : ' nologo'}">${f.art ? `<img alt="" src="${esc(f.art)}" data-logo>` : ''}<em>${esc(f.abbr || setCode({ id: setIdOf(c.id), name: f.name || '' }))}</em></span>
+      <span class="grow"><b>${esc(f.name || '')}</b><span class="muted small">${esc(code)}${isJa(c.id) ? ' · Japonesa' : ''}</span></span></button>`;
+  };
   const draw = async () => {
     openSheet('<p class="muted">Buscando carta e preço…</p>', onDone);
     try { detail = await getCard(cards[idx].id); }
     catch { sheet.innerHTML = '<p>Sem conexão para buscar esta carta.</p><button class="btn alt" type="button" data-close>Voltar</button>'; return; }
     if (sheet.hidden) return;
     sheetCard = detail;
-    const alts = cards.length > 1 ? `<div class="section"><span class="muted small">Não é essa? Escolha outra:</span>
-      <div class="alts">${cards.map((c, i) => `<button type="button" data-alt="${i}" class="${i === idx ? 'on' : ''}" aria-label="${esc(c.name)}${isJa(c.id) ? ', japonesa' : ''}">${imgTag(c)}${isJa(c.id) ? '<span class="lang">JP</span>' : ''}</button>`).join('')}</div></div>` : '';
-    sheet.innerHTML = `${cardHead(detail)}${alts}<div id="variants">${variantRows(detail)}</div>${cardExtras(detail)}
+    const others = cards.slice(same);
+    const choose = same > 1 ? `<div class="section"><p class="${picked ? 'muted small' : 'warn'}">${cards.resolved
+      ? 'Coleção identificada pelo código impresso no canto da carta. Confira antes de adicionar.'
+      : `Esta arte existe em ${same} coleções. Confira o código no canto inferior da carta e escolha:`}</p>
+      <div class="set-options">${cards.slice(0, same).map(option).join('')}</div></div>` : '';
+    const alts = others.length ? `<div class="section"><span class="muted small">Não é essa carta? Escolha outra:</span>
+      <div class="alts">${others.map((c, k) => `<button type="button" data-alt="${same + k}" aria-label="${esc(c.name)}${isJa(c.id) ? ', japonesa' : ''}">${imgTag(c)}${isJa(c.id) ? '<span class="lang">JP</span>' : ''}</button>`).join('')}</div></div>` : '';
+    const variant = (detail.variants.length ? VARIANTS[detail.variants[0]].label : 'Normal').toLowerCase();
+    sheet.innerHTML = `${cardHead(picked ? detail : { ...detail, setName: "Coleção a confirmar", localId: "?" })}${choose}<div id="variants">${variantRows(detail)}</div>${alts}${cardExtras(detail)}
       <div class="sheet-actions">
-        <button class="btn" type="button" data-add>Adicionar ${esc((detail.variants.length ? VARIANTS[detail.variants[0]].label : 'Normal').toLowerCase())}</button>
+        ${picked ? `<button class="btn" type="button" data-add>Adicionar ${esc(variant)} · ${esc(detail.setName)}</button>`
+          : '<button class="btn" type="button" disabled>Escolha a coleção acima</button>'}
         <button class="btn alt" type="button" data-close>${resume ? 'Continuar escaneando' : 'Fechar'}</button></div>`;
-    $$('[data-alt]', sheet).forEach(b => b.onclick = () => { idx = +b.dataset.alt; draw(); });
-    $('[data-add]', sheet).onclick = () => {
+    $$('[data-alt]', sheet).forEach(b => b.onclick = () => { idx = +b.dataset.alt; picked = true; draw(); });
+    $('[data-add]', sheet)?.addEventListener('click', () => {
       if (!sheetArmed()) return;
       store.lastJa = isJa(detail.id);
       setQty(detail, detail.variants[0] || 'normal', 1);
-      toast(`${detail.name} adicionada`);
+      toast(`${detail.name} adicionada em ${detail.setName}`);
       closeSheet();
-    };
+    });
   };
   draw();
-  void read;
 }
 async function fromPhoto(file) {
   paused = true;
@@ -628,7 +666,7 @@ document.addEventListener('click', async e => {
   else if (d.scope) { store.scope[route.setId] = d.scope; save(); render(); }
   else if (d.currency) { store.currency = d.currency; save(); refreshFx(); render(); }
   else if (d.manual !== undefined) manualForm();
-  else if (d.step && sheetCard && sheetArmed()) { setQty(sheetCard, d.variant, +d.step); $('#variants').innerHTML = variantRows(sheetCard); }
+  else if (d.step && sheetCard && sheetArmed() && !$('#sheet button[disabled]')) { setQty(sheetCard, d.variant, +d.step); $('#variants').innerHTML = variantRows(sheetCard); }
   else if (b.id === 'scanBtn') openScanner();
   else if (b.id === 'scanClose') closeScanner();
   else if (b.id === 'torch') {
