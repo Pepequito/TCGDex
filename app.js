@@ -28,18 +28,30 @@ function once(key, fn) {
   if (!memo.has(key)) memo.set(key, fn().catch(e => { memo.delete(key); throw e; }));
   return memo.get(key);
 }
+// Cartas japonesas têm numeração própria e ficam separadas pelo prefixo ja:.
+const isJa = id => String(id).startsWith('ja:');
+const jaRaw = id => id.slice(3);
 const isPocket = id => /^(A|B)\d+[a-z]?$|^P-/.test(id);
 
 // A lista em inglês é a mais completa; os nomes em português entram por cima quando existem.
 const getSets = () => once('sets', async () => {
-  const [en, pt] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => [])]);
+  const [en, pt, ja] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON(`${API}/ja/sets`).catch(() => [])]);
   const ptById = new Map(pt.map(s => [s.id, s]));
   return en.filter(s => !isPocket(s.id)).map(s => ({
     id: s.id, nameEn: s.name, name: (ptById.get(s.id)?.name || s.name).trim(),
     official: s.cardCount.official, total: s.cardCount.total, logo: ptById.get(s.id)?.logo || s.logo,
-  })).reverse();
+  })).reverse().concat(ja.filter(s => !isPocket(s.id)).map(s => ({
+    id: 'ja:' + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo,
+  })).reverse());
 });
 const getSet = id => once('set:' + id, async () => {
+  if (isJa(id)) {
+    const ja = await getJSON(`${API}/ja/sets/${jaRaw(id)}`);
+    return {
+      id, name: ja.name, official: ja.cardCount.official, total: ja.cardCount.total, abbr: '', tcgOnline: '',
+      cards: ja.cards.map(c => ({ id: 'ja:' + c.id, localId: c.localId, name: c.name, nameEn: c.name, image: c.image, imageEn: c.image, setId: id })),
+    };
+  }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/sets/${id}`), getJSON(`${API}/pt/sets/${id}`).catch(() => null)]);
   const ptCards = new Map((pt?.cards || []).map(c => [c.localId, c]));
   return {
@@ -52,6 +64,14 @@ const getSet = id => once('set:' + id, async () => {
   };
 });
 const getCard = id => once('card:' + id, async () => {
+  if (isJa(id)) {
+    const ja = await getJSON(`${API}/ja/cards/${jaRaw(id)}`);
+    return {
+      id, localId: ja.localId, name: ja.name, nameEn: ja.name, image: ja.image, imageEn: ja.image,
+      rarity: ja.rarity || '', setId: 'ja:' + ja.set.id, setName: ja.set.name,
+      variants: Object.keys(VARIANTS).filter(v => ja.variants?.[v]), prices: extractPrices(ja),
+    };
+  }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/cards/${id}`), getJSON(`${API}/pt/cards/${id}`).catch(() => null)]);
   return {
     id, localId: en.localId, name: pt?.name || en.name, nameEn: en.name, image: pt?.image || en.image, imageEn: en.image,
@@ -152,7 +172,7 @@ async function refreshPrices(onStep) {
 }
 
 /* ---------- Telas ---------- */
-const route = { tab: 'home', setId: null, q: '', filter: 'all', results: null };
+const route = { tab: 'home', setId: null, q: '', filter: 'all', results: null, region: 'west' };
 const view = $('#view');
 function go(next) { Object.assign(route, next); render(); window.scrollTo(0, 0); }
 
@@ -201,11 +221,12 @@ async function renderHome() {
 }
 async function renderSets() {
   view.innerHTML = `<h1>Sets</h1><input id="setFilter" class="field" type="search" placeholder="Filtrar por nome" value="${esc(route.q)}" autocomplete="off">
+    <div class="seg" role="group" aria-label="Região dos sets">${[['west', 'Ocidentais'], ['ja', 'Japoneses']].map(([k, l]) => `<button type="button" data-region="${k}" class="${route.region === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="rows" id="setList"><div class="row muted">Carregando sets…</div></div>`;
   const draw = sets => {
     const q = norm($('#setFilter')?.value || ''), owned = ownedBySet();
     const box = $('#setList'); if (!box) return;
-    const hits = sets.filter(s => !q || norm(s.name).includes(q) || norm(s.nameEn).includes(q));
+    const hits = sets.filter(s => isJa(s.id) === (route.region === 'ja')).filter(s => !q || norm(s.name).includes(q) || norm(s.nameEn).includes(q));
     box.innerHTML = hits.map(s => progressRow(s, owned[s.id] || 0)).join('') || '<div class="row muted">Nenhum set com esse nome.</div>';
   };
   try {
@@ -256,12 +277,13 @@ function drawResults(cards) {
 }
 async function searchCards(q) {
   const param = encodeURIComponent(q);
-  const [pt, en] = await Promise.all([
+  const [pt, en, ja] = await Promise.all([
     getJSON(`${API}/pt/cards?name=${param}&pagination:itemsPerPage=60`).catch(() => []),
     getJSON(`${API}/en/cards?name=${param}&pagination:itemsPerPage=60`).catch(() => []),
+    getJSON(`${API}/ja/cards?name=${param}&pagination:itemsPerPage=60`).catch(() => []),
   ]);
   const seen = new Map();
-  for (const c of [...pt, ...en]) if (!seen.has(c.id) && !isPocket(c.id.split('-')[0])) seen.set(c.id, { ...c, imageEn: c.image });
+  for (const c of [...pt, ...en, ...ja.map(c => ({ ...c, id: 'ja:' + c.id }))]) if (!seen.has(c.id) && !isPocket(c.id.replace('ja:', '').split('-')[0])) seen.set(c.id, { ...c, imageEn: c.image });
   return [...seen.values()].reverse();
 }
 function renderSettings() {
@@ -305,7 +327,7 @@ function variantRows(card) {
 }
 function cardHead(card) {
   return `<div class="card-head">${imgTag(card, 'high', card.name)}<div><h2>${esc(card.name)}</h2>
-    <span class="muted">${esc(card.setName)}</span><span class="num small">Nº ${esc(card.localId)}</span>
+    <span class="muted">${esc(card.setName)}${isJa(card.id) ? ' · Japonesa' : ''}</span><span class="num small">Nº ${esc(card.localId)}</span>
     ${card.rarity ? `<span class="muted small">${esc(card.rarity)}</span>` : ''}</div></div>`;
 }
 let sheetCard = null;
@@ -408,11 +430,23 @@ function crop(src, x, y, w, h, scale, invert = false) {
   g.putImageData(img, 0, 0);
   return c;
 }
+// Só dígitos: a barra às vezes vira outro número, mas o número da carta continua lá dentro do texto.
+async function readDigits(src, W, H) {
+  const w = await ocrWorker();
+  let text = '';
+  for (const [x, y, cw, ch, psm] of [[.04, .91, .36, .065, '6'], [.04, .91, .36, .065, '11'], [.02, .895, .45, .09, '6']]) {
+    await w.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: '0123456789/' });
+    const { data } = await w.recognize(crop(src, W * x, H * y, W * cw, H * ch, Math.min(5, 1600 / (W * cw))));
+    text += ' ' + data.text;
+  }
+  await w.setParameters({ tessedit_char_whitelist: '' });
+  return text;
+}
 // `src` é o recorte da carta. O número pode estar no canto esquerdo (atuais) ou direito (antigas).
 async function readCard(src, W, H) {
   const w = await ocrWorker();
   let strip = '', number = null;
-  await w.setParameters({ tessedit_pageseg_mode: '11' });
+  await w.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '' });
   for (const x of [0, .5]) {
     const { data } = await w.recognize(crop(src, W * x, H * .915, W * .5, H * .075, Math.min(4, 1400 / (W * .5))));
     strip += ' ' + data.text;
@@ -496,19 +530,20 @@ async function matchArt(src, W, H, rot = 0, limit = 6) {
     }
   }
   return Array.from(best.keys()).sort((a, b) => best[a] - best[b]).slice(0, limit).map(i => {
-    const [id, p] = cards[i], localId = id.slice(id.lastIndexOf('-') + 1), image = `https://assets.tcgdex.net/en/${paths[p]}/${localId}`;
+    const [id, p] = cards[i], localId = id.slice(id.lastIndexOf('-') + 1), image = `https://assets.tcgdex.net/${isJa(id) ? 'ja' : 'en'}/${paths[p]}/${localId}`;
     return { id, localId, name: id, image, imageEn: image, dist: best[i] };
   });
 }
-// Quando duas cartas têm arte quase igual (reimpressões), o número impresso decide.
+// Sem número legível, entre artes empatadas vale o idioma da última carta adicionada.
+const preferred = (c, cards) => +(cards[0].dist <= 28 && c.dist - cards[0].dist <= 2 && isJa(c.id) === !!store.lastJa);
+// Quando duas cartas têm arte quase igual (reimpressões e versões japonesas), o número impresso decide.
 async function rerank(cards, src, W, H) {
   if (cards.length < 2 || cards[1].dist - cards[0].dist > 5) return cards;
   try {
-    const { number } = await readCard(src, W, H);
-    if (!number?.local) return cards;
-    const near = c => parseInt(c.localId, 10) === parseInt(number.local, 10) && c.dist - cards[0].dist <= 8;
-    return [...cards].sort((a, b) => near(b) - near(a) || a.dist - b.dist);
-  } catch { return cards; }
+    const printed = await readDigits(src, W, H);
+    const near = c => { const n = c.localId.replace(/^0+/, ''); return /^d{2,}$/.test(n) && printed.includes(n) && c.dist - cards[0].dist <= 8; };
+    return [...cards].sort((a, b) => near(b) - near(a) || preferred(b, cards) - preferred(a, cards) || a.dist - b.dist);
+  } catch { return [...cards].sort((a, b) => preferred(b, cards) - preferred(a, cards) || a.dist - b.dist); }
 }
 
 /* ---------- Scanner ---------- */
@@ -601,13 +636,14 @@ function showMatch({ cards, read }, resume = true) {
     if (sheet.hidden) return;
     sheetCard = detail;
     const alts = cards.length > 1 ? `<div class="section"><span class="muted small">Não é essa? Escolha outra:</span>
-      <div class="alts">${cards.map((c, i) => `<button type="button" data-alt="${i}" class="${i === idx ? 'on' : ''}" aria-label="${esc(c.name)}">${imgTag(c)}</button>`).join('')}</div></div>` : '';
+      <div class="alts">${cards.map((c, i) => `<button type="button" data-alt="${i}" class="${i === idx ? 'on' : ''}" aria-label="${esc(c.name)}${isJa(c.id) ? ', japonesa' : ''}">${imgTag(c)}${isJa(c.id) ? '<span class="lang">JP</span>' : ''}</button>`).join('')}</div></div>` : '';
     sheet.innerHTML = `${cardHead(detail)}${alts}<div id="variants">${variantRows(detail)}</div>
       <div class="sheet-actions">
         <button class="btn" type="button" data-add>Adicionar ${esc((detail.variants.length ? VARIANTS[detail.variants[0]].label : 'Normal').toLowerCase())}</button>
         <button class="btn alt" type="button" data-close>${resume ? 'Continuar escaneando' : 'Fechar'}</button></div>`;
     $$('[data-alt]', sheet).forEach(b => b.onclick = () => { idx = +b.dataset.alt; draw(); });
     $('[data-add]', sheet).onclick = () => {
+      store.lastJa = isJa(detail.id);
       setQty(detail, detail.variants[0] || 'normal', 1);
       toast(`${detail.name} adicionada`);
       closeSheet();
@@ -679,6 +715,7 @@ document.addEventListener('click', async e => {
   else if (d.card) showCard(d.card);
   else if (d.close !== undefined) closeSheet();
   else if (d.filter) go({ filter: d.filter });
+  else if (d.region) go({ region: d.region });
   else if (d.scope) { store.scope[route.setId] = d.scope; save(); render(); }
   else if (d.currency) { store.currency = d.currency; save(); refreshFx(); render(); }
   else if (d.step && sheetCard) { setQty(sheetCard, d.variant, +d.step); $('#variants').innerHTML = variantRows(sheetCard); }

@@ -92,7 +92,8 @@ img { max-width: 100%; display: block; }
 .card-head img, .card-head .noimg { width: 112px; aspect-ratio: 63/88; border-radius: 6px; object-fit: cover; background: var(--pocket); }
 .card-head > div { display: grid; gap: 4px; min-width: 0; }
 .alts { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.alts button { flex: 0 0 58px; border-radius: 4px; overflow: hidden; border: 2px solid transparent; }
+.alts button { position: relative; flex: 0 0 58px; border-radius: 4px; overflow: hidden; border: 2px solid transparent; }
+.alts .lang { position: absolute; left: 2px; bottom: 2px; padding: 0 4px; border-radius: 3px; background: rgb(10 18 34 / .82); color: #fff; font: 600 10px var(--mono); }
 .alts button.on { border-color: var(--accent); }
 .variant { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .variant .prices { color: var(--muted); font-size: 13px; }
