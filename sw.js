@@ -1,4 +1,4 @@
-const SHELL = 'fichario-shell-14', RUNTIME = 'fichario-runtime-1';
+const SHELL = 'boosterz-shell-202611032207', RUNTIME = 'fichario-runtime-1';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'views.js', 'desk.js', 'sync.js', 'social.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon.svg', 'icons/favicon-64.png', 'data/index.json', 'data/hashes.bin', 'data/set-logos.json', 'data/catalog.json'];
 
 self.addEventListener('install', e => {
@@ -16,13 +16,17 @@ async function cacheFirst(req) {
   if (res.ok || res.type === 'opaque') (await caches.open(RUNTIME)).put(req, res.clone());
   return res;
 }
+// Arquivos do próprio app sempre conferem se há versão nova, em vez de confiar no cache do navegador.
+const fresh = req => req.url.startsWith(self.location.origin)
+  ? fetch(req.mode === 'navigate' ? req.url : req, { cache: 'no-cache', ...(req.mode === 'navigate' ? { credentials: 'same-origin' } : {}) })
+  : fetch(req);
 async function networkFirst(req) {
   try {
-    const res = await fetch(req);
+    const res = await fresh(req);
     if (res.ok) (await caches.open(req.url.startsWith(self.location.origin) ? SHELL : RUNTIME)).put(req, res.clone());
     return res;
   } catch (err) {
-    const hit = await caches.match(req);
+    const hit = await caches.match(req, { ignoreSearch: true });
     if (hit) return hit;
     throw err;
   }

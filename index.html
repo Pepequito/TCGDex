@@ -17,10 +17,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=202611032207">
+<style>
+/* Estilo mínimo da abertura, embutido: ela fica certa mesmo se styles.css ainda estiver carregando. */
+#splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 14px; background: #0d1120; }
+#splash img { width: 120px; height: 120px; }
+#splash b { font: 800 30px system-ui, sans-serif; color: #f2f5fc; }
+</style>
 </head>
 <body>
 <div id="splash" aria-hidden="true"><img src="icons/icon.svg" alt=""><b>Boosterz</b></div>
+<script>setTimeout(function () { var s = document.getElementById('splash'); if (s) s.remove(); }, 3000);</script>
 <header id="deskbar">
   <form id="deskSearch" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
     <input id="deskQ" type="search" placeholder="Buscar cartas de qualquer coleção" aria-label="Buscar cartas" autocomplete="off"><kbd>/</kbd></form>
@@ -59,11 +66,11 @@
 <input id="importInput" type="file" accept="application/json,.json" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
-<script src="firebase-config.js" defer></script>
-<script src="app.js" defer></script>
-<script src="views.js" defer></script>
-<script src="desk.js" defer></script>
-<script src="sync.js" defer></script>
-<script src="social.js" defer></script>
+<script src="firebase-config.js?v=202611032207" defer></script>
+<script src="app.js?v=202611032207" defer></script>
+<script src="views.js?v=202611032207" defer></script>
+<script src="desk.js?v=202611032207" defer></script>
+<script src="sync.js?v=202611032207" defer></script>
+<script src="social.js?v=202611032207" defer></script>
 </body>
 </html>
