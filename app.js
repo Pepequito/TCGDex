@@ -182,6 +182,7 @@ function setQty(card, variant, delta) {
   if (!Object.keys(c.qty).length) delete store.cards[card.id];
   save();
   window.Sync?.changed(card.id);
+  window.Social?.publishSoon();
 }
 async function refreshPrices(onStep) {
   const cards = list();

@@ -9,10 +9,10 @@ let sheetCard = null;
 
 function go(next) { Object.assign(route, next); render(); window.scrollTo(0, 0); }
 function render() {
-  const active = route.tab === 'settings' ? 'profile' : route.tab;
+  const active = route.tab === 'settings' || route.tab === 'friend' ? 'profile' : route.tab;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === active));
   if (window.Desk?.render()) return;
-  ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings })[route.tab]();
+  ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings, friend: () => window.Social?.renderFriend() })[route.tab]();
 }
 const plural = (n, one, many) => `${n.toLocaleString('pt-BR')} ${n === 1 ? one : many}`;
 function ownedBySet() {
@@ -35,6 +35,7 @@ function saveProfile() {
   store.profile.updatedAt = Date.now();
   save();
   window.Sync?.changedProfile();
+  window.Social?.publishSoon();
 }
 
 /* ---------- Coleção ---------- */
@@ -316,13 +317,16 @@ async function renderProfile() {
       <div class="identity"><span class="ring-avatar">${avatar()}</span><h1>${esc(trainerName())}</h1>
         ${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
       <button class="btn alt" type="button" data-edit-profile>Editar perfil</button>
+      ${window.Social?.ownBlock() || ''}
       <div class="stat-grid">
         <div class="stat"><b>${money(collectionValue())}</b><span>Valor da coleção</span></div>
         <div class="stat"><b>${copiesCount()}</b><span>Cartas</span></div>
         <div class="stat"><b>${completed}</b><span>Sets completos</span></div>
         <div class="stat"><b>${won}/${list_.length}</b><span>Conquistas</span></div></div>
       <div class="section"><div class="section-head"><h2>Vitrine</h2>${showcaseCards().length ? '<button type="button" data-pick>Editar</button>' : ''}</div>${showcaseBlock()}</div>
-      <div class="section"><div class="section-head"><h2>Conquistas</h2></div><div class="badges">${[...list_].sort((a, b) => b[3] - a[3]).map(badge).join('')}</div></div>`;
+      <div class="section"><div class="section-head"><h2>Conquistas</h2></div><div class="badges">${[...list_].sort((a, b) => b[3] - a[3]).map(badge).join('')}</div></div>
+      <div class="section" id="friendsBox"></div>`;
+    window.Social?.fillFriends();
   };
   draw(0);
   if (!cards.length) return;

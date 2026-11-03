@@ -164,6 +164,23 @@ textarea.field { resize: none; min-height: 76px; }
 .pocket .lang-tag { position: absolute; right: 4px; bottom: 4px; padding: 0 4px; border-radius: 4px; background: rgb(8 12 24 / .82); color: #fff; font: 600 10px var(--mono); }
 .page-head h1 + span { display: block; margin-top: 4px; }
 
+/* Amigos */
+.social { gap: 10px; }
+.handle-form { display: flex; align-items: center; gap: 8px; }
+.handle-form .at { font: 700 20px var(--display); color: var(--muted); }
+.handle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.handle-row b { font: 700 18px var(--display); overflow-wrap: anywhere; }
+.btn.auto { display: inline-block; width: auto; padding-inline: 16px; }
+.check { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.people { display: grid; gap: 6px; }
+.person { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.person-main { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; text-align: left; }
+.person-main .avatar { width: 38px; height: 38px; font-size: 16px; }
+.person-main b { display: block; overflow-wrap: anywhere; }
+.person-main .small { display: block; }
+.person .btn { padding: 8px 14px; font-size: 13px; }
+
 /* Painel inferior */
 #sheetBack { position: fixed; inset: 0; z-index: 40; background: rgb(4 7 16 / .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 #sheet { position: fixed; inset: auto 0 0; z-index: 41; display: grid; gap: 16px; max-width: 560px; max-height: 94dvh; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain;

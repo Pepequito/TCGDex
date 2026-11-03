@@ -1,8 +1,40 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isMe(uid) { return request.auth != null && request.auth.uid == uid; }
+    function profile(uid) { return get(/databases/$(database)/documents/profiles/$(uid)).data; }
+    function hasProfile(uid) { return exists(/databases/$(database)/documents/profiles/$(uid)); }
+
+    // Coleção: o dono lê e escreve; outras pessoas só leem se o dono deixou o perfil público.
     match /users/{uid}/cards/{cardId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if isMe(uid) || (hasProfile(uid) && profile(uid).privacy == 'public');
+      allow write: if isMe(uid);
+    }
+
+    // Perfil público: qualquer um lê, menos quando o dono escolheu "privado".
+    match /profiles/{uid} {
+      allow read: if isMe(uid) || (resource != null && resource.data.privacy != 'private');
+      allow write: if isMe(uid) && request.resource.data.uid == uid
+        && request.resource.data.privacy in ['public', 'showcase', 'private'];
+      allow delete: if isMe(uid);
+    }
+
+    // Nome de usuário único: só dá para criar um nome livre, e só o dono apaga o próprio.
+    match /usernames/{name} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+        && name.matches('^[a-z0-9_]{3,20}$');
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
+    // Quem eu sigo (só eu altero) e quem me segue (cada um altera só a própria entrada).
+    match /follows/{uid}/following/{other} {
+      allow read: if true;
+      allow write: if isMe(uid);
+    }
+    match /followers/{uid}/list/{other} {
+      allow read: if true;
+      allow write: if isMe(other);
     }
   }
 }

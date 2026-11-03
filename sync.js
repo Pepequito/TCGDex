@@ -54,6 +54,7 @@ window.Sync = (() => {
       status = 'Sincronizando…';
       unsub = cardsRef().onSnapshot({ includeMetadataChanges: true }, onSnapshot, () => { status = 'Erro ao sincronizar. Confira as regras do Firestore.'; paint(); });
     }
+    window.Social?.onUser(user);
     paint(); render();
   }
   function reconcile(snap) {
@@ -171,6 +172,7 @@ window.Sync = (() => {
     changed(id) { if (user && db) send([id]); },
     changedAll(ids) { if (user && db) send(ids); },
     changedProfile() { if (user && db) sendProfile(); },
+    ctx: () => ({ db, user }),
     user: () => user && { name: user.displayName?.split(' ')[0] || '', photo: user.photoURL || '', email: user.email || '' },
     nudge: () => config && !user && list().length
       ? '<button class="btn alt" type="button" data-tab="settings">Entre na conta para proteger sua coleção</button>' : '',
