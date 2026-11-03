@@ -1,4 +1,4 @@
-const SHELL = 'boosterz-shell-202611032328', RUNTIME = 'fichario-runtime-1';
+const SHELL = 'boosterz-shell-202611032333', RUNTIME = 'fichario-runtime-1';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'views.js', 'desk.js', 'sync.js', 'social.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/logo.webp', 'icons/favicon-64.png', 'data/index.json', 'data/hashes.bin', 'data/set-logos.json', 'data/catalog.json'];
 
 self.addEventListener('install', e => {

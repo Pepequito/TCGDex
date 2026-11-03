@@ -59,10 +59,10 @@ function valueChart() {
   return `<div class="chart" id="valueChart">
     <div class="readout" id="chartRead"><b>${money(vals[end])}</b> em ${dayLabel(h[end][0])}</div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evolução do valor da coleção, de ${money(vals[0])} para ${money(vals[end])}">
-      <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd35c" stop-opacity=".28"/><stop offset="1" stop-color="#ffd35c" stop-opacity="0"/></linearGradient></defs>
+      <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc23d" stop-opacity=".28"/><stop offset="1" stop-color="#ffc23d" stop-opacity="0"/></linearGradient></defs>
       <path d="${line} L${W} ${H} L0 ${H} Z" fill="url(#area)"/>
-      <path d="${line}" fill="none" stroke="#ffd35c" stroke-width="2" vector-effect="non-scaling-stroke"/>
-      <line id="chartCursor" x1="${W}" x2="${W}" y1="0" y2="${H}" stroke="#9aa6c2" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/>
+      <path d="${line}" fill="none" stroke="#ffc23d" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <line id="chartCursor" x1="${W}" x2="${W}" y1="0" y2="${H}" stroke="#a3b1d6" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/>
     </svg>
     <div class="axis"><span>${dayLabel(h[0][0])}</span><span>${dayLabel(h[end][0])}</span></div></div>`;
 }
@@ -160,8 +160,8 @@ async function renderSets() {
 }
 function ring(pct, done) {
   const r = 34, len = 2 * Math.PI * r;
-  return `<svg class="ring" viewBox="0 0 80 80" aria-hidden="true"><defs><linearGradient id="foilRing"><stop offset="0" stop-color="#5ee7ff"/><stop offset=".5" stop-color="#a98bff"/><stop offset="1" stop-color="#ff8fc7"/></linearGradient></defs>
-    <circle cx="40" cy="40" r="${r}" stroke="#2c3757"/><circle cx="40" cy="40" r="${r}" stroke="${done ? '#ffd35c' : 'url(#foilRing)'}" stroke-linecap="round" stroke-dasharray="${len * pct / 100} ${len}"/>
+  return `<svg class="ring" viewBox="0 0 80 80" aria-hidden="true"><defs><linearGradient id="foilRing"><stop offset="0" stop-color="#3fd8ff"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ff5a2e"/></linearGradient></defs>
+    <circle cx="40" cy="40" r="${r}" stroke="#2a3670"/><circle cx="40" cy="40" r="${r}" stroke="${done ? '#ffc23d' : 'url(#foilRing)'}" stroke-linecap="round" stroke-dasharray="${len * pct / 100} ${len}"/>
     <text x="40" y="40">${Math.floor(pct)}</text></svg>`;
 }
 async function renderSet() {
