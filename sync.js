@@ -6,6 +6,7 @@ window.Sync = (() => {
   const config = window.FICHARIO_FIREBASE;
   let auth = null, db = null, user = null, unsub = null, reconciled = false, booted = false;
   let status = 'Conectando…', notice = '';
+  const PROFILE = '__profile';
 
   const ERRORS = {
     'auth/invalid-credential': 'E-mail ou senha incorretos.',
@@ -57,6 +58,10 @@ window.Sync = (() => {
   }
   function reconcile(snap) {
     const remote = new Map(snap.docs.map(d => [d.id, d.data()]));
+    const profile = remote.get(PROFILE);
+    remote.delete(PROFILE);
+    if (profile && (profile.updatedAt || 0) > (store.profile.updatedAt || 0)) store.profile = profile;
+    else if (store.profile.updatedAt) sendProfile();
     const synced = new Set(store.synced || []);
     const toSend = [];
     for (const [id, r] of remote) {
@@ -72,6 +77,7 @@ window.Sync = (() => {
     }
     return send(toSend);
   }
+  const sendProfile = () => cardsRef().doc(PROFILE).set(clean(store.profile)).catch(() => { status = 'Erro ao salvar na nuvem'; paint(); });
   async function send(ids) {
     for (let i = 0; i < ids.length; i += 400) {
       const batch = db.batch();
@@ -90,12 +96,13 @@ window.Sync = (() => {
       for (const ch of snap.docChanges()) {
         if (ch.doc.metadata.hasPendingWrites) continue;
         const id = ch.doc.id, l = store.cards[id];
+        if (id === PROFILE) { if (ch.type !== 'removed') store.profile = ch.doc.data(); changed = true; continue; }
         if (ch.type === 'removed') delete store.cards[id];
         else store.cards[id] = { ...ch.doc.data(), prices: l?.prices || ch.doc.data().prices };
         changed = true;
       }
     }
-    if (!fromCache) store.synced = snap.docs.map(d => d.id);
+    if (!fromCache) store.synced = snap.docs.map(d => d.id).filter(id => id !== PROFILE);
     status = hasPendingWrites ? 'Salvando na nuvem…' : fromCache ? 'Sem internet. As mudanças sobem depois.' : 'Tudo salvo na nuvem';
     if (changed) { save(); if (sheet.hidden && scanner.hidden) render(); }
     else save();
@@ -163,6 +170,8 @@ window.Sync = (() => {
     paint,
     changed(id) { if (user && db) send([id]); },
     changedAll(ids) { if (user && db) send(ids); },
+    changedProfile() { if (user && db) sendProfile(); },
+    user: () => user && { name: user.displayName?.split(' ')[0] || '', photo: user.photoURL || '', email: user.email || '' },
     nudge: () => config && !user && list().length
       ? '<button class="btn alt" type="button" data-tab="settings">Entre na conta para proteger sua coleção</button>' : '',
   };

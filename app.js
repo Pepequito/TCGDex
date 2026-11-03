@@ -40,6 +40,8 @@ const getSets = () => once('sets', async () => {
   return en.filter(s => !isPocket(s.id)).map(s => ({
     id: s.id, nameEn: s.name, name: (ptById.get(s.id)?.name || s.name).trim(),
     official: s.cardCount.official, total: s.cardCount.total, logo: ptById.get(s.id)?.logo || s.logo,
+    symbol: s.symbol || ptById.get(s.id)?.symbol,
+    serie: /assets\.tcgdex\.net\/(?:en|pt|univ)\/([^/]+)\//.exec(s.logo || s.symbol || '')?.[1] || /^(me|swsh|sv|sm|xy|bw|hgss|dp|pl|ex|neo|base|gym|ecard)/.exec(s.id)?.[1] || '',
   })).reverse().concat(ja.filter(s => !isPocket(s.id)).map(s => ({
     id: 'ja:' + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo,
   })).reverse());
@@ -49,6 +51,10 @@ const customSet = () => {
   const cards = Object.values(store.cards).filter(c => c.setId === 'custom');
   return { id: 'custom', name: 'Cartas cadastradas', official: cards.length, total: cards.length, abbr: '', tcgOnline: '', cards };
 };
+const getSeries = () => once('series', async () => {
+  const [en, pt] = await Promise.all([getJSON(`${API}/en/series`), getJSON(`${API}/pt/series`).catch(() => [])]);
+  return Object.fromEntries([...en, ...pt].map(x => [x.id, x.name]));
+});
 const getSet = id => id === 'custom' ? Promise.resolve(customSet()) : once('set:' + id, async () => {
   if (isJa(id)) {
     const ja = await getJSON(`${API}/ja/sets/${jaRaw(id)}`);
@@ -193,142 +199,6 @@ async function refreshPrices(onStep) {
   return failed;
 }
 
-/* ---------- Telas ---------- */
-const route = { tab: 'home', setId: null, q: '', filter: 'all', results: null, region: 'west' };
-const view = $('#view');
-function go(next) { Object.assign(route, next); render(); window.scrollTo(0, 0); }
-
-function render() {
-  $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === route.tab));
-  ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, settings: renderSettings })[route.tab]();
-}
-function progressRow(s, have) {
-  const size = s.total || s.official || 1;
-  const pct = Math.min(100, have / size * 100);
-  return `<button class="row" type="button" data-set="${esc(s.id)}">
-    <b>${esc(s.name)}</b><span class="num small">${have}/${size}</span>
-    <span class="meter${have >= size ? ' done' : ''}"><i style="width:${pct}%"></i></span></button>`;
-}
-function ownedBySet() {
-  const m = {};
-  for (const c of list()) m[c.setId] = (m[c.setId] || 0) + 1;
-  return m;
-}
-async function renderHome() {
-  const cards = list();
-  const total = cards.reduce((a, c) => a + valueOf(c), 0);
-  const copies = cards.reduce((a, c) => a + qtyOf(c), 0);
-  const top = [...cards].sort((a, b) => valueOf(b) - valueOf(a)).slice(0, 5);
-  view.innerHTML = `
-    <div class="ledger"><span class="label">Valor da coleção</span>
-      <span class="value num-display">${money(total)}</span>
-      <span class="meta">${copies} ${copies === 1 ? 'carta' : 'cartas'} · ${cards.length} ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div>
-    ${window.Sync?.nudge() || ''}
-    ${cards.length ? `
-    <div class="section"><div class="section-head"><h2>Seus sets</h2></div><div class="rows" id="mySets"><div class="row muted">Carregando…</div></div></div>
-    <div class="section"><div class="section-head"><h2>Mais valiosas</h2></div>
-      <div class="rows">${top.map(c => `<button class="row thumb" type="button" data-card="${esc(c.id)}">${imgTag(c, 'low')}
-        <span><b>${esc(c.name)}</b><span class="sub">${esc(c.setName)} · ${esc(c.localId)}</span></span><span class="num small">${money(valueOf(c))}</span></button>`).join('')}</div></div>`
-    : `<div class="empty"><h2>Seu fichário está vazio</h2>
-       <p class="muted">Aponte a câmera para a primeira carta. O app reconhece a arte e você confirma antes de adicionar.</p>
-       <button class="btn" type="button" data-scan>Escanear a primeira carta</button></div>`}`;
-  if (!cards.length) return;
-  try {
-    const sets = await getSets(), owned = ownedBySet();
-    const box = $('#mySets'); if (!box) return;
-    const recent = {};
-    for (const c of cards) recent[c.setId] = Math.max(recent[c.setId] || 0, c.addedAt);
-    const mine = sets.filter(s => owned[s.id]);
-    if (owned.custom) mine.push(customSet());
-    box.innerHTML = mine.sort((a, b) => recent[b.id] - recent[a.id]).map(s => progressRow(s, owned[s.id])).join('');
-  } catch { const box = $('#mySets'); if (box) box.innerHTML = '<div class="row muted">Sem conexão. Tente de novo em instantes.</div>'; }
-}
-async function renderSets() {
-  view.innerHTML = `<h1>Sets</h1><input id="setFilter" class="field" type="search" placeholder="Filtrar por nome" value="${esc(route.q)}" autocomplete="off">
-    <div class="seg" role="group" aria-label="Região dos sets">${[['west', 'Ocidentais'], ['ja', 'Japoneses']].map(([k, l]) => `<button type="button" data-region="${k}" class="${route.region === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <div class="rows" id="setList"><div class="row muted">Carregando sets…</div></div>`;
-  const draw = sets => {
-    const q = norm($('#setFilter')?.value || ''), owned = ownedBySet();
-    const box = $('#setList'); if (!box) return;
-    const hits = sets.filter(s => isJa(s.id) === (route.region === 'ja')).filter(s => !q || norm(s.name).includes(q) || norm(s.nameEn).includes(q));
-    box.innerHTML = hits.map(s => progressRow(s, owned[s.id] || 0)).join('') || '<div class="row muted">Nenhum set com esse nome.</div>';
-  };
-  try {
-    const sets = await getSets(); draw(sets);
-    $('#setFilter')?.addEventListener('input', e => { route.q = e.target.value; draw(sets); });
-  } catch { $('#setList').innerHTML = '<div class="row muted">Sem conexão. Abra de novo quando estiver online.</div>'; }
-}
-async function renderSet() {
-  view.innerHTML = '<button class="back" type="button" data-back>‹ Sets</button><p class="muted">Abrindo set…</p>';
-  let s;
-  try { s = await getSet(route.setId); }
-  catch { view.innerHTML = '<button class="back" type="button" data-back>‹ Sets</button><p class="muted">Não consegui abrir este set. Verifique a conexão.</p>'; return; }
-  if (route.tab !== 'sets' || route.setId !== s.id) return;
-  const scope = store.scope[s.id] || 'all';
-  const num = c => parseInt(c.localId, 10);
-  const inScope = s.cards.filter(c => scope === 'all' || (num(c) <= s.official && /^\d+$/.test(c.localId)));
-  const have = inScope.filter(c => store.cards[c.id]).length;
-  const shown = inScope.filter(c => route.filter === 'all' || (route.filter === 'have') === !!store.cards[c.id]);
-  const left = inScope.length - have;
-  const value = list().filter(c => c.setId === s.id).reduce((a, c) => a + valueOf(c), 0);
-  view.innerHTML = `<button class="back" type="button" data-back>‹ Sets</button>
-    <div class="ledger"><h1>${esc(s.name)}</h1>
-      <span class="meta">${left ? `Faltam ${left} de ${inScope.length} cartas` : 'Set completo'} · ${money(value)}</span></div>
-    <div class="meter${left ? '' : ' done'}"><i style="width:${inScope.length ? have / inScope.length * 100 : 0}%"></i></div>
-    <div class="controls">
-      <div class="seg" role="group" aria-label="Quais cartas contam">
-        <button type="button" data-scope="all" class="${scope === 'all' ? 'on' : ''}">Completo (${s.cards.length})</button>
-        <button type="button" data-scope="base" class="${scope === 'base' ? 'on' : ''}">Base (${s.official})</button></div>
-      <div class="seg" role="group" aria-label="Filtro">
-        ${[['all', 'Todas'], ['have', 'Tenho'], ['miss', 'Faltam']].map(([k, l]) => `<button type="button" data-filter="${k}" class="${route.filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    </div>
-    <div class="binder">${shown.map(c => {
-      const own = store.cards[c.id];
-      return `<button type="button" class="pocket${own ? '' : ' missing'}" data-card="${esc(c.id)}" aria-label="${esc(c.name)} ${esc(c.localId)}${own ? '' : ', faltando'}">
-        ${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${own && qtyOf(own) > 1 ? `<span class="qty">×${qtyOf(own)}</span>` : ''}</button>`;
-    }).join('') || '<p class="muted">Nada para mostrar neste filtro.</p>'}</div>`;
-}
-function renderSearch() {
-  view.innerHTML = `<h1>Buscar carta</h1>
-    <form id="searchForm"><input id="searchInput" class="field" type="search" enterkeyhint="search" placeholder="Nome da carta, como Charizard" value="${esc(route.q)}" autocomplete="off"></form>
-    <div id="searchOut"></div>
-    <button class="btn alt" type="button" data-manual>Não achou? Cadastrar carta manualmente</button>`;
-  if (route.results) drawResults(route.results);
-}
-function drawResults(cards) {
-  const box = $('#searchOut'); if (!box) return;
-  box.innerHTML = cards.length ? `<div class="binder">${cards.map(c => `<button type="button" class="pocket${store.cards[c.id] ? '' : ' missing'}" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c)}<span class="tag">${esc(c.localId)}</span></button>`).join('')}</div>`
-    : '<p class="muted">Nenhuma carta encontrada. Confira a grafia do nome em inglês ou português.</p>';
-}
-async function searchCards(q) {
-  const param = encodeURIComponent(q);
-  const [pt, en, ja] = await Promise.all([
-    getJSON(`${API}/pt/cards?name=${param}&pagination:itemsPerPage=60`).catch(() => []),
-    getJSON(`${API}/en/cards?name=${param}&pagination:itemsPerPage=60`).catch(() => []),
-    getJSON(`${API}/ja/cards?name=${param}&pagination:itemsPerPage=60`).catch(() => []),
-  ]);
-  const seen = new Map();
-  for (const c of [...pt, ...en, ...ja.map(c => ({ ...c, id: 'ja:' + c.id }))]) if (!seen.has(c.id) && !isPocket(c.id.replace('ja:', '').split('-')[0])) seen.set(c.id, { ...c, imageEn: c.image });
-  return [...seen.values()].reverse();
-}
-function renderSettings() {
-  const when = store.pricedAt ? new Date(store.pricedAt).toLocaleDateString('pt-BR') : 'nunca';
-  view.innerHTML = `<h1>Ajustes</h1>
-    <div class="section" id="account"></div>
-    <div class="section"><h2>Moeda</h2>
-      <div class="seg" role="group" aria-label="Moeda">${['BRL', 'USD', 'EUR'].map(c => `<button type="button" data-currency="${c}" class="${store.currency === c ? 'on' : ''}">${c}</button>`).join('')}</div>
-      <p class="muted small">Os preços vêm da TCGplayer (EUA) e da Cardmarket (Europa) e são convertidos pela cotação do dia. O mercado brasileiro pode praticar valores diferentes.${store.fx ? ` US$ 1 = R$ ${store.fx.BRL.toFixed(2).replace('.', ',')}.` : ''}</p></div>
-    <div class="section"><h2>Preços</h2>
-      <button id="refreshPrices" class="btn alt" type="button">Atualizar preços da coleção</button>
-      <p class="muted small">Última atualização: ${when}.</p></div>
-    <div class="section"><h2>Backup</h2>
-      <button id="exportBtn" class="btn alt" type="button">Exportar coleção</button>
-      <button id="importBtn" class="btn alt" type="button">Importar backup</button>
-      <p class="muted small">Sem conta, a coleção fica só neste iPhone. Exporte de vez em quando e guarde o arquivo no iCloud Drive.</p></div>
-    <p class="muted small">Dados de cartas: TCGdex. Reconhecimento feito no próprio aparelho. Projeto pessoal, sem vínculo com The Pokémon Company ou Nintendo.</p>`;
-  window.Sync?.paint();
-}
-
 /* ---------- Painel da carta ---------- */
 const sheet = $('#sheet'), sheetBack = $('#sheetBack');
 let onSheetClose = null;
@@ -339,72 +209,6 @@ function closeSheet() {
   sheet.hidden = sheetBack.hidden = true;
   const fn = onSheetClose; onSheetClose = null; fn?.(); render();
 }
-function cardExtras(card) {
-  const own = store.cards[card.id];
-  const liga = `<a class="btn alt" href="${esc(ligaUrl(card))}" target="_blank" rel="noopener">Ver na Liga Pokémon</a>`;
-  if (!own) return liga;
-  return `${liga}<form id="valueForm" class="value-form"><label for="valueInput" class="small muted">Meu valor por carta (R$)</label>
-    <input id="valueInput" class="field" inputmode="decimal" autocomplete="off" placeholder="Usar preço automático" value="${esc(brlText(own.custom))}">
-    <button class="btn alt" type="submit">Salvar valor</button></form>`;
-}
-function manualForm() {
-  openSheet(`<h2>Cadastrar carta</h2><form id="manualForm" class="section">
-    <input id="mName" class="field" placeholder="Nome, como Mega Zeraora ex" autocomplete="off" required>
-    <input id="mSet" class="field" placeholder="Set, como Promos MEP" autocomplete="off">
-    <input id="mNumber" class="field" placeholder="Número, como 089" autocomplete="off">
-    <input id="mValue" class="field" inputmode="decimal" placeholder="Valor em R$ (opcional)" autocomplete="off">
-    <label class="btn alt" for="mPhoto" id="mPhotoLabel">Adicionar foto (opcional)</label>
-    <input id="mPhoto" type="file" accept="image/*" hidden>
-    <button class="btn" type="submit">Adicionar à coleção</button>
-    <button class="btn alt" type="button" data-close>Cancelar</button></form>`);
-}
-// Foto pequena: ela viaja junto com a carta para a nuvem.
-async function photoData(file) {
-  const bmp = await createImageBitmap(file), k = Math.min(1, 320 / bmp.width);
-  const c = document.createElement('canvas');
-  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', .7);
-}
-async function saveManual() {
-  const name = $('#mName').value.trim(); if (!name) return;
-  const file = $('#mPhoto').files[0];
-  const image = file ? await photoData(file).catch(() => '') : '';
-  const id = 'custom:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const card = { id, localId: $('#mNumber').value.trim() || '—', name, image, imageEn: image, rarity: '', setId: 'custom', setName: $('#mSet').value.trim() || 'Cartas cadastradas', prices: {}, variants: ['normal'] };
-  setQty(card, 'normal', 1);
-  setCustom(id, parseBrl($('#mValue').value));
-  toast(`${name} adicionada`);
-  closeSheet();
-}
-function variantRows(card) {
-  const own = store.cards[card.id]?.qty || {};
-  const vs = card.variants.length ? card.variants : ['normal'];
-  return vs.map(v => {
-    const p = card.prices?.[v], custom = store.cards[card.id]?.custom, usd = custom != null ? customUsd(custom) : toUsd(p);
-    const src = [p?.usd != null ? `US$ ${p.usd.toFixed(2)}` : '', p?.eur ? `€ ${p.eur.toFixed(2)}` : ''].filter(Boolean).join(' · ');
-    return `<div class="variant"><b>${VARIANTS[v].label}</b>
-      <div class="stepper"><button type="button" data-step="-1" data-variant="${v}" aria-label="Remover ${VARIANTS[v].label}">−</button><span>${own[v] || 0}</span><button type="button" data-step="1" data-variant="${v}" aria-label="Adicionar ${VARIANTS[v].label}">+</button></div>
-      <span class="prices">${custom != null ? `${money(usd)} <span class="small">(seu valor)</span>` : usd != null ? `${money(usd)} <span class="small">(${src})</span>` : 'Sem preço disponível'}</span></div>`;
-  }).join('');
-}
-function cardHead(card) {
-  return `<div class="card-head">${imgTag(card, 'high', card.name)}<div><h2>${esc(card.name)}</h2>
-    <span class="muted">${esc(card.setName)}${isJa(card.id) ? ' · Japonesa' : ''}</span><span class="num small">Nº ${esc(card.localId)}</span>
-    ${card.rarity ? `<span class="muted small">${esc(card.rarity)}</span>` : ''}</div></div>`;
-}
-let sheetCard = null;
-async function showCard(id) {
-  openSheet('<p class="muted">Buscando carta e preço…</p>');
-  try {
-    const own = store.cards[id];
-    sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
-    if (sheet.hidden) return;
-    sheet.innerHTML = `${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${cardExtras(sheetCard)}
-      <button class="btn alt" type="button" data-close>Fechar</button>`;
-  } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
-}
-
 /* ---------- Identificação ---------- */
 function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); }
 function similarity(a, b) {
@@ -742,7 +546,7 @@ async function fromPhoto(file) {
 /* ---------- Backup ---------- */
 async function exportBackup() {
   const name = `fichario-${new Date().toISOString().slice(0, 10)}.json`;
-  const blob = new Blob([JSON.stringify({ app: 'fichario', version: 1, cards: store.cards }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ app: 'fichario', version: 1, cards: store.cards, profile: store.profile }, null, 1)], { type: 'application/json' });
   const file = new File([blob], name, { type: 'application/json' });
   if (navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file], title: name }); } catch { /* cancelado */ }
@@ -757,7 +561,9 @@ async function importBackup(file) {
     if (data.app !== 'fichario' || typeof data.cards !== 'object') throw 0;
     const now = Date.now();
     for (const c of Object.values(data.cards)) c.updatedAt = now;
-    Object.assign(store.cards, data.cards); save(); render();
+    Object.assign(store.cards, data.cards);
+    if (data.profile) { store.profile = data.profile; window.Sync?.changedProfile(); }
+    save(); render();
     window.Sync?.changedAll(Object.keys(data.cards));
     toast(`${Object.keys(data.cards).length} cartas importadas`);
   } catch { toast('Esse arquivo não é um backup do Fichário.'); }
@@ -819,12 +625,6 @@ $('#photoInput').addEventListener('change', async e => {
   if (!f) return;
   try { await fromPhoto(f); } catch { paused = false; say('Não consegui ler essa foto.'); }
 });
-document.addEventListener('change', e => {
-  if (e.target.id === 'mPhoto' && e.target.files[0]) $('#mPhotoLabel').textContent = 'Foto escolhida';
-});
 $('#importInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f); });
 
-render();
-refreshFx();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 window.fichario = { matchArt, rerank, showMatch };
