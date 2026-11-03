@@ -203,9 +203,11 @@ async function refreshPrices(onStep) {
 const sheet = $('#sheet'), sheetBack = $('#sheetBack');
 let onSheetClose = null;
 function openSheet(html, onClose = null) {
+  document.body.classList.add('drawer');
   sheet.innerHTML = html; sheet.hidden = sheetBack.hidden = false; sheet.scrollTop = 0; onSheetClose = onClose;
 }
 function closeSheet() {
+  document.body.classList.remove('drawer');
   sheet.hidden = sheetBack.hidden = true;
   const fn = onSheetClose; onSheetClose = null; fn?.(); render();
 }
@@ -540,7 +542,7 @@ async function fromPhoto(file) {
   if (best[0].dist <= MATCH_MAX) { showMatch({ cards: await rerank(best, bestSrc, bestSrc.width, bestSrc.height) }); return; }
   const r = await identify(bestSrc, bestSrc.width, bestSrc.height);
   if (r.cards.length) showMatch(r);
-  else { paused = false; say('Não reconheci essa foto. Tente de mais perto ou use Buscar.'); }
+  else { paused = false; say('Não reconheci essa foto. Tente de mais perto ou use Buscar.'); if (scanner.hidden) toast('Não reconheci essa carta. Tente uma foto mais de perto.'); }
 }
 
 /* ---------- Backup ---------- */

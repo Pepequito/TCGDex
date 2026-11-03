@@ -11,6 +11,7 @@ function go(next) { Object.assign(route, next); render(); window.scrollTo(0, 0);
 function render() {
   const active = route.tab === 'settings' ? 'profile' : route.tab;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === active));
+  if (window.Desk?.render()) return;
   ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings })[route.tab]();
 }
 const plural = (n, one, many) => `${n.toLocaleString('pt-BR')} ${n === 1 ? one : many}`;
