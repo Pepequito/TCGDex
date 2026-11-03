@@ -691,11 +691,6 @@ document.addEventListener('submit', async e => {
     $('#variants').innerHTML = variantRows(sheetCard);
     return toast(text ? 'Valor salvo' : 'Voltando ao preço automático');
   }
-  if (e.target.id !== 'searchForm') return;
-  const q = $('#searchInput').value.trim(); if (!q) return;
-  route.q = q; $('#searchOut').innerHTML = '<p class="muted">Buscando…</p>';
-  $('#searchInput').blur();
-  route.results = await searchCards(q); drawResults(route.results);
 });
 $('#photoInput').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';

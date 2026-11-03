@@ -150,10 +150,8 @@ window.Desk = (() => {
     if (e.target.id !== 'deskSearch') return;
     e.preventDefault();
     const q = $('#deskQ').value.trim(); if (!q) return;
-    go({ tab: 'search', q, results: null });
-    $('#searchOut').innerHTML = '<p class="muted">Buscando…</p>';
-    route.results = await searchCards(q);
-    if (route.tab === 'search') drawResults(route.results);
+    explore.shown = PAGE;
+    go({ tab: 'search', q });
   });
   // Teclado: / busca, Enter abre a linha, ← e → passam de carta com a gaveta aberta.
   document.addEventListener('keydown', e => {

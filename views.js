@@ -195,18 +195,66 @@ function pocket(c) {
 }
 
 /* ---------- Busca ---------- */
-function renderSearch() {
-  view.innerHTML = `<h1>Buscar</h1>
-    <form id="searchForm"><input id="searchInput" class="field" type="search" enterkeyhint="search" placeholder="Nome da carta, como Charizard" aria-label="Nome da carta" value="${esc(route.q)}" autocomplete="off"></form>
-    <div id="searchOut"></div>
+/* ---------- Explorar: todas as cartas ---------- */
+const PAGE = 60;
+// Como norm(), mas mantém letras de qualquer alfabeto: buscas em japonês também funcionam.
+const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N} ]/gu, ' ').replace(/\s+/g, ' ').trim();
+const explore = { set: '', kind: '', own: '', shown: PAGE };
+// O catálogo vem de data/catalog.json (tools/build-catalog.js) e fica no aparelho depois da primeira vez.
+const getCatalog = () => once('catalog', async () => {
+  const [cat, sets] = await Promise.all([getJSON('data/catalog.json'), getSets().catch(() => [])]);
+  const rank = new Map(sets.map((s, i) => [s.id, i])), names = new Map(sets.map(s => [s.id, s.name]));
+  return cat.cards.map(([id, name, p, pt]) => {
+    const setId = id.replace(/-[^-]+$/, ''), localId = id.slice(id.lastIndexOf('-') + 1);
+    const image = p >= 0 ? `https://assets.tcgdex.net/${cat.paths[p]}/${localId}` : '';
+    const setName = names.get(setId) || setId;
+    return { id, localId, name: pt || name, nameEn: name, image, imageEn: image.replace('/pt/', '/en/'), setId, setName,
+      rank: rank.has(setId) ? rank.get(setId) : 1e6, num: parseInt(localId, 10) || 0, hay: fold(`${name} ${pt || ''} ${setName} ${setId}`) };
+  }).sort((a, b) => a.rank - b.rank || a.num - b.num || a.localId.localeCompare(b.localId));
+});
+// Cada palavra precisa aparecer; número puro também casa com o número da carta ("charizard 125").
+function exploreHits(all) {
+  const words = fold(route.q).split(' ').filter(Boolean);
+  return all.filter(c => (!explore.set || c.setId === explore.set)
+    && (!explore.kind || (explore.kind === 'ja') === isJa(c.id))
+    && (!explore.own || (explore.own === 'have') === !!store.cards[c.id])
+    && words.every(w => /^\d+$/.test(w) ? c.num === +w || c.hay.includes(w) : c.hay.includes(w)));
+}
+function catalogPocket(c) {
+  const own = store.cards[c.id];
+  return `<button type="button" class="pocket catalog" data-card="${esc(c.id)}" aria-label="${esc(c.name)}, ${esc(c.setName)} ${esc(c.localId)}${own ? ', na coleção' : ''}">
+    ${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${own ? `<span class="have">✓${qtyOf(own) > 1 ? ' ' + qtyOf(own) : ''}</span>` : ''}${isJa(c.id) ? '<span class="lang-tag">JP</span>' : ''}</button>`;
+}
+async function renderSearch() {
+  view.innerHTML = `<div class="page-head"><div><h1>Explorar</h1><span class="muted" id="exploreCount">Carregando o catálogo…</span></div></div>
+    <form id="exploreForm" class="explore-bar" role="search">
+      <input id="exploreQ" class="field" type="search" enterkeyhint="search" placeholder="Nome ou número, como Charizard 125" aria-label="Buscar carta" value="${esc(route.q)}" autocomplete="off">
+      <select id="exploreSet" class="field" aria-label="Set"><option value="">Todos os sets</option></select>
+      <select id="exploreKind" class="field" aria-label="Edição"><option value="">Todas as edições</option><option value="west"${explore.kind === 'west' ? ' selected' : ''}>Ocidentais</option><option value="ja"${explore.kind === 'ja' ? ' selected' : ''}>Japonesas</option></select>
+      <select id="exploreOwn" class="field" aria-label="Coleção"><option value="">Todas as cartas</option><option value="have"${explore.own === 'have' ? ' selected' : ''}>Só as que tenho</option><option value="miss"${explore.own === 'miss' ? ' selected' : ''}>Só as que faltam</option></select>
+    </form>
+    <div id="exploreOut" class="section"></div>
     <button class="btn alt" type="button" data-manual>Não achou? Cadastrar carta manualmente</button>`;
-  if (route.results) drawResults(route.results);
+  try {
+    const [all, sets] = await Promise.all([getCatalog(), getSets().catch(() => [])]);
+    if (route.tab !== 'search') return;
+    const pick = $('#exploreSet');
+    pick.innerHTML += sets.map(s => `<option value="${esc(s.id)}"${explore.set === s.id ? ' selected' : ''}>${esc(s.name)}${isJa(s.id) ? ' (JP)' : ''}</option>`).join('');
+    drawExplore(all);
+  } catch { $('#exploreCount').textContent = 'Não consegui carregar o catálogo. Verifique a conexão.'; }
 }
-function drawResults(cards) {
-  const box = $('#searchOut'); if (!box) return;
-  box.innerHTML = cards.length ? `<div class="binder">${cards.map(pocket).join('')}</div>`
-    : '<p class="muted">Nenhuma carta encontrada. Confira a grafia do nome em inglês, português ou japonês.</p>';
+async function drawExplore(all) {
+  all ??= await getCatalog();
+  const out = $('#exploreOut'); if (!out) return;
+  const hits = exploreHits(all), page = hits.slice(0, explore.shown);
+  $('#exploreCount').textContent = route.q || explore.set || explore.kind || explore.own
+    ? `${hits.length.toLocaleString('pt-BR')} ${hits.length === 1 ? 'carta encontrada' : 'cartas encontradas'}`
+    : `${all.length.toLocaleString('pt-BR')} cartas no catálogo, das mais novas às mais antigas`;
+  out.innerHTML = page.length ? `<div class="binder">${page.map(catalogPocket).join('')}</div>
+    ${hits.length > page.length ? `<button class="btn alt" type="button" data-more>Mostrar mais ${Math.min(PAGE, hits.length - page.length)}</button>` : ''}`
+    : '<div class="empty"><h2>Nenhuma carta encontrada</h2><p class="muted">Confira a grafia, tente o nome em inglês ou tire algum filtro.</p></div>';
 }
+// A Busca pela internet continua servindo ao scanner quando a arte não está no banco.
 async function searchCards(q) {
   const param = encodeURIComponent(q);
   const [pt, en, ja] = await Promise.all([
@@ -340,7 +388,7 @@ function renderSettings() {
 function cardExtras(card) {
   const own = store.cards[card.id], on = store.profile.showcase.includes(card.id);
   const liga = `<a class="btn alt" href="${esc(ligaUrl(card))}" target="_blank" rel="noopener">Ver na Liga Pokémon</a>`;
-  if (!own) return `<div id="extras">${liga}</div>`;
+  if (!own) return `<div id="extras"><button class="btn" type="button" data-add-card>Adicionar à coleção · ${esc((VARIANTS[card.variants?.[0]] || VARIANTS.normal).label)}</button>${liga}</div>`;
   return `<div id="extras"><div class="split"><button class="btn alt${on ? ' toggled' : ''}" type="button" data-star>${on ? '★ Na vitrine' : '☆ Pôr na vitrine'}</button>${liga.replace('Ver na Liga Pokémon', 'Liga Pokémon')}</div>
     <details${own.custom != null ? ' open' : ''}><summary>Definir meu valor</summary><form id="valueForm" class="value-form"><label for="valueInput" class="small muted">Valor por carta (R$)</label>
     <input id="valueInput" class="field" inputmode="decimal" autocomplete="off" placeholder="Usar preço automático" value="${esc(brlText(own.custom))}">
@@ -432,10 +480,30 @@ document.addEventListener('click', e => {
   else if (d.editProfile !== undefined) { pendingPhoto = undefined; editProfile(); }
   else if (d.show) { if (toggleShowcase(d.show)) b.classList.toggle('on'); }
   else if (d.star !== undefined && sheetCard) { toggleShowcase(sheetCard.id); $('#extras').outerHTML = cardExtras(sheetCard); }
+  else if (d.more !== undefined) { explore.shown += PAGE; drawExplore(); }
+  else if (d.addCard !== undefined && sheetCard) {
+    setQty(sheetCard, sheetCard.variants[0] || 'normal', 1);
+    toast(`${sheetCard.name} adicionada em ${sheetCard.setName}`);
+    $('#variants').innerHTML = variantRows(sheetCard);
+    $('#extras').outerHTML = cardExtras(sheetCard);
+  }
   else if (d.photoOff !== undefined) { pendingPhoto = null; b.remove(); $('#pPreview').innerHTML = '<span class="avatar initials">?</span>'; }
   else if (d.step !== undefined) setTimeout(() => { const x = $('#extras'); if (x && sheetCard) x.outerHTML = cardExtras(sheetCard); });
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) closeSheet(); });
+let exploreTimer;
+document.addEventListener('input', e => {
+  if (e.target.id !== 'exploreQ') return;
+  route.q = e.target.value;
+  clearTimeout(exploreTimer);
+  exploreTimer = setTimeout(() => { explore.shown = PAGE; drawExplore(); }, 120);
+});
+document.addEventListener('change', e => {
+  const key = { exploreSet: 'set', exploreKind: 'kind', exploreOwn: 'own' }[e.target.id];
+  if (!key) return;
+  explore[key] = e.target.value; explore.shown = PAGE; drawExplore();
+});
+document.addEventListener('submit', e => { if (e.target.id === 'exploreForm') { e.preventDefault(); $('#exploreQ').blur(); } });
 document.addEventListener('change', async e => {
   if (e.target.id === 'mPhoto' && e.target.files[0]) $('#mPhotoLabel').textContent = 'Foto escolhida';
   if (e.target.id === 'pPhoto' && e.target.files[0]) {

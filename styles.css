@@ -156,6 +156,14 @@ textarea.field { resize: none; min-height: 76px; }
 .mini-logo em { display: none; font: 800 13px var(--display); font-style: normal; color: transparent; background: var(--foil); -webkit-background-clip: text; background-clip: text; }
 .mini-logo.nologo em { display: block; }
 
+/* Explorar */
+.explore-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.explore-bar #exploreQ, .explore-bar #exploreSet { grid-column: 1 / -1; }
+.explore-bar select.field { padding: 10px 8px; font-size: 13px; border-radius: 12px; }
+.pocket.catalog .have { position: absolute; right: 4px; top: 4px; padding: 1px 6px; border-radius: 5px; background: #3ddc97; color: #06281a; font: 700 11px var(--mono); }
+.pocket .lang-tag { position: absolute; right: 4px; bottom: 4px; padding: 0 4px; border-radius: 4px; background: rgb(8 12 24 / .82); color: #fff; font: 600 10px var(--mono); }
+.page-head h1 + span { display: block; margin-top: 4px; }
+
 /* Painel inferior */
 #sheetBack { position: fixed; inset: 0; z-index: 40; background: rgb(4 7 16 / .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 #sheet { position: fixed; inset: auto 0 0; z-index: 41; display: grid; gap: 16px; max-width: 560px; max-height: 94dvh; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain;
@@ -298,7 +306,8 @@ details summary { padding: 8px 0; color: var(--muted); font-size: 14px; font-wei
   #view { max-width: 1240px; margin: 0 0 0 236px; padding: 92px 32px 56px; gap: 24px; transition: margin-right .2s ease; }
   @media (min-width: 1500px) { #view { margin-left: max(236px, calc(236px + (100vw - 236px - 1240px) / 2)); } }
   body.drawer #view { margin-right: 452px; }
-  #searchForm { display: none; }
+  .explore-bar { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); max-width: 1000px; }
+  .explore-bar #exploreQ, .explore-bar #exploreSet { grid-column: auto; }
   .btn { padding: 10px 16px; border-radius: 10px; }
   .btn.auto { display: inline-block; width: auto; }
   #view > .btn, #view > .empty, .panel:not(.span-4):not(.span-5):not(.span-7):not(.span-8) { max-width: 640px; }
