@@ -5,6 +5,11 @@
 <title>Boosterz</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Escaneie, organize e acompanhe o valor da sua coleção de Pokémon TCG.">
+<meta property="og:title" content="Boosterz · TCG Tracker">
+<meta property="og:description" content="Escaneie suas cartas, acompanhe o valor da coleção e siga seus amigos.">
+<meta property="og:image" content="https://pepequito.github.io/TCGDex/icons/og.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Boosterz">
@@ -16,17 +21,18 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611032316">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css?v=202611032323">
 <style>
 /* Estilo mínimo da abertura, embutido: ela fica certa mesmo se styles.css ainda estiver carregando. */
 #splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 14px; background: #0d1120; }
 #splash img { width: 120px; height: 120px; }
-#splash b { font: 800 30px system-ui, sans-serif; color: #f2f5fc; }
+#splash b { display: block; font: 800 30px system-ui, sans-serif; color: #ffc83d; }
+#splash small { display: block; color: #5ee7ff; letter-spacing: .3em; font: 700 11px system-ui, sans-serif; text-align: center; }
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><img src="icons/icon.svg" alt=""><b>Boosterz</b></div>
+<div id="splash" aria-hidden="true"><img src="icons/icon.svg" alt=""><span class="wordmark"><b>BOOSTERZ</b><small>TCG TRACKER</small></span></div>
 <script>setTimeout(function () { var s = document.getElementById('splash'); if (s) s.remove(); }, 3000);</script>
 <header id="deskbar">
   <form id="deskSearch" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
@@ -37,6 +43,7 @@
 <main id="view"></main>
 
 <nav id="tabs" aria-label="Navegação principal">
+  <div id="brand" class="desk-only"><img src="icons/icon.svg" alt=""><span class="wordmark"><b>BOOSTERZ</b><small>TCG TRACKER</small></span></div>
   <button data-tab="home" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3zM5 18a3 3 0 0 1 3-3h11"/></svg><span>Coleção</span></button>
   <button data-tab="cards" type="button" class="desk-only"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Minhas cartas</span></button>
   <button data-tab="sets" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg><span>Sets</span></button>
@@ -66,11 +73,11 @@
 <input id="importInput" type="file" accept="application/json,.json" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
-<script src="firebase-config.js?v=202611032316" defer></script>
-<script src="app.js?v=202611032316" defer></script>
-<script src="views.js?v=202611032316" defer></script>
-<script src="desk.js?v=202611032316" defer></script>
-<script src="sync.js?v=202611032316" defer></script>
-<script src="social.js?v=202611032316" defer></script>
+<script src="firebase-config.js?v=202611032323" defer></script>
+<script src="app.js?v=202611032323" defer></script>
+<script src="views.js?v=202611032323" defer></script>
+<script src="desk.js?v=202611032323" defer></script>
+<script src="sync.js?v=202611032323" defer></script>
+<script src="social.js?v=202611032323" defer></script>
 </body>
 </html>
