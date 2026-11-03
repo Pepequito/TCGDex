@@ -55,41 +55,50 @@ const getSeries = () => once('series', async () => {
   const [en, pt] = await Promise.all([getJSON(`${API}/en/series`), getJSON(`${API}/pt/series`).catch(() => [])]);
   return Object.fromEntries([...en, ...pt].map(x => [x.id, x.name]));
 });
+// A TCGdex lista algumas cartas sem imagem; o catálogo (data/catalog.json) traz as que foram recuperadas.
+async function withImages(cards) {
+  if (!cards.some(c => !c.image)) return cards;
+  const known = await catalogImages().catch(() => new Map());
+  for (const c of cards) if (!c.image && known.get(c.id)) c.image = c.imageEn = known.get(c.id);
+  return cards;
+}
+const fillSet = async set => { await withImages(set.cards); return set; };
+const fillCard = async card => (await withImages([card]))[0];
 const getSet = id => id === 'custom' ? Promise.resolve(customSet()) : once('set:' + id, async () => {
   if (isJa(id)) {
     const ja = await getJSON(`${API}/ja/sets/${jaRaw(id)}`);
-    return {
+    return fillSet({
       id, name: ja.name, official: ja.cardCount.official, total: ja.cardCount.total, abbr: '', tcgOnline: '',
       cards: ja.cards.map(c => ({ id: 'ja:' + c.id, localId: c.localId, name: c.name, nameEn: c.name, image: c.image, imageEn: c.image, setId: id })),
-    };
+    });
   }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/sets/${id}`), getJSON(`${API}/pt/sets/${id}`).catch(() => null)]);
   const ptCards = new Map((pt?.cards || []).map(c => [c.localId, c]));
-  return {
+  return fillSet({
     id, name: pt?.name || en.name, official: en.cardCount.official, total: en.cardCount.total,
     abbr: en.abbreviation?.official || '', tcgOnline: en.tcgOnline || '',
     cards: en.cards.map(c => {
       const p = ptCards.get(c.localId);
       return { id: c.id, localId: c.localId, name: p?.name || c.name, nameEn: c.name, image: p?.image || c.image, imageEn: c.image, setId: id };
     }),
-  };
+  });
 });
 const getCard = id => once('card:' + id, async () => {
   if (isJa(id)) {
     const ja = await getJSON(`${API}/ja/cards/${jaRaw(id)}`);
-    return {
+    return fillCard({
       id, localId: ja.localId, name: ja.name, nameEn: ja.name, image: ja.image, imageEn: ja.image,
       rarity: ja.rarity || '', setId: 'ja:' + ja.set.id, setName: ja.set.name,
       variants: Object.keys(VARIANTS).filter(v => ja.variants?.[v]), prices: extractPrices(ja),
-    };
+    });
   }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/cards/${id}`), getJSON(`${API}/pt/cards/${id}`).catch(() => null)]);
-  return {
+  return fillCard({
     id, localId: en.localId, name: pt?.name || en.name, nameEn: en.name, image: pt?.image || en.image, imageEn: en.image,
     rarity: pt?.rarity || en.rarity || '', setId: en.set.id, setName: pt?.set?.name || en.set.name,
     variants: Object.keys(VARIANTS).filter(v => en.variants?.[v]),
     prices: extractPrices(en),
-  };
+  });
 });
 const VARIANTS = {
   normal: { label: 'Normal', tcg: ['normal'] },
@@ -114,7 +123,8 @@ function extractPrices(card) {
   }
   return out;
 }
-const imageUrl = (base, q = 'low') => !base ? '' : base.startsWith('data:') ? base : `${base}/${q}.webp`;
+const imageUrl = (base, q = 'low') => !base ? '' : base.startsWith('data:') ? base
+  : base.startsWith('https://images.pokemontcg.io/') ? base + (q === 'high' ? '_hires.png' : '.png') : `${base}/${q}.webp`;
 function imgTag(c, q = 'low', alt = '') {
   if (!c.image) return `<div class="noimg">${esc(c.name)}</div>`;
   const fallback = c.imageEn && c.imageEn !== c.image ? imageUrl(c.imageEn, q) : '';
@@ -437,7 +447,7 @@ async function matchArt(src, W, H, rot = 0, limit = 6) {
     }
   }
   return shortlist.sort((a, b) => best[a] - best[b]).slice(0, limit).map(i => {
-    const [id, p] = cards[i], localId = id.slice(id.lastIndexOf('-') + 1), image = `https://assets.tcgdex.net/${isJa(id) ? 'ja' : 'en'}/${paths[p]}/${localId}`;
+    const [id, p] = cards[i], localId = id.slice(id.lastIndexOf('-') + 1), image = paths[p].startsWith('http') ? paths[p] : `https://assets.tcgdex.net/${isJa(id) ? 'ja' : 'en'}/${paths[p]}/${localId}`;
     return { id, localId, name: id, image, imageEn: image, dist: best[i] };
   });
 }

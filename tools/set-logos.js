@@ -10,15 +10,17 @@ const altId = id => id.replace(/(\D)0+(\d)/g, '$1$2').replace('.5', 'pt5');
   const en = await get(`${API}/en/sets`);
   const missing = en.filter(s => !s.logo && !/^(A|B)\d|^P-/.test(s.id));
   const out = {};
-  for (const lang of ['pt', 'fr', 'de', 'it', 'es']) {
-    for (const s of await get(`${API}/${lang}/sets`)) if (s.logo && !out[s.id] && missing.some(m => m.id === s.id)) out[s.id] = s.logo + '.webp';
-  }
-  const ptcg = (await get('https://api.pokemontcg.io/v2/sets?pageSize=250&select=id,name,images')).data;
+  // Ordem de preferência: português, depois o logo em inglês da Pokémon TCG API, e só então outros idiomas.
+  const fromLang = async lang => { for (const s of await get(`${API}/${lang}/sets`)) if (s.logo && !out[s.id] && missing.some(m => m.id === s.id)) out[s.id] = s.logo + '.webp'; };
+  await fromLang('pt');
+  let ptcg = [];
+  for (let i = 0; i < 6 && !ptcg.length; i++) { try { ptcg = (await get('https://api.pokemontcg.io/v2/sets?pageSize=250&select=id,name,images')).data || []; } catch { await new Promise(r => setTimeout(r, 1500 * (i + 1))); } }
   for (const m of missing) {
     if (out[m.id]) continue;
     const p = ptcg.find(p => p.id === altId(m.id)) || ptcg.find(p => norm(p.name) === norm(m.name));
     if (p?.images?.logo) out[m.id] = p.images.logo;
   }
+  for (const lang of ['fr', 'de', 'it', 'es']) await fromLang(lang);
   fs.writeFileSync(path.join(process.argv[2], 'set-logos.json'), JSON.stringify(out));
   console.log('sem logo', missing.length, 'recuperados', Object.keys(out).length, 'ainda sem:', missing.filter(m => !out[m.id]).map(m => m.id).join(' '));
 })();

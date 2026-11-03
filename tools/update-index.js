@@ -37,7 +37,8 @@ async function fetchRetry(url, tries = 3) {
     const cat = JSON.parse(fs.readFileSync(path.join(dir, 'catalog.json'), 'utf8'));
     queue = cat.cards.filter(([id, , p]) => p >= 0 && !have.has(id)).map(([id, , p]) => {
       const local = id.slice(id.lastIndexOf('-') + 1), lg = id.startsWith('ja:') ? 'ja' : 'en';
-      return { id: id.replace(/^ja:/, ''), key: id, lg, image: `https://assets.tcgdex.net/${cat.paths[p]}/${local}` };
+      const base = cat.paths[p];
+      return { id: id.replace(/^ja:/, ''), key: id, lg, image: base.startsWith('http') ? base : `https://assets.tcgdex.net/${base}/${local}` };
     });
   } else {
     const all = await (await fetchRetry(`https://api.tcgdex.net/v2/${lang}/cards`)).json();
@@ -50,12 +51,13 @@ async function fetchRetry(url, tries = 3) {
     while (queue.length) {
       const c = queue.shift();
       try {
-        const res = await fetchRetry(c.image + '/low.webp');
+        const external = c.image.startsWith('https://images.pokemontcg.io/');
+        const res = await fetchRetry(external ? c.image + '.png' : c.image + '/low.webp');
         if (!res.ok) throw new Error(res.status);
         const img = sharp(Buffer.from(await res.arrayBuffer())).removeAlpha(), m = await img.metadata();
         const raw = await img.extract({ left: Math.round(m.width * ART.x), top: Math.round(m.height * ART.y), width: Math.round(m.width * ART.w), height: Math.round(m.height * ART.h) })
           .resize(S, S, { fit: 'fill', kernel: 'cubic' }).raw().toBuffer();
-        const base = c.image.replace(`https://assets.tcgdex.net/${c.lg}/`, '').replace(/\/[^/]*$/, '');
+        const base = external ? c.image : c.image.replace(`https://assets.tcgdex.net/${c.lg}/`, '').replace(/\/[^/]*$/, '');
         if (!pathIx.has(base)) { pathIx.set(base, index.paths.length); index.paths.push(base); }
         rows.push([c.key, pathIx.get(base)]);
         hashes.push(hash(raw));

@@ -207,12 +207,13 @@ const getCatalog = () => once('catalog', async () => {
   const rank = new Map(sets.map((s, i) => [s.id, i])), names = new Map(sets.map(s => [s.id, s.name]));
   return cat.cards.map(([id, name, p, pt]) => {
     const setId = id.replace(/-[^-]+$/, ''), localId = id.slice(id.lastIndexOf('-') + 1);
-    const image = p >= 0 ? `https://assets.tcgdex.net/${cat.paths[p]}/${localId}` : '';
+    const base = cat.paths[p], image = p < 0 ? '' : base.startsWith('http') ? base : `https://assets.tcgdex.net/${base}/${localId}`;
     const setName = names.get(setId) || setId;
     return { id, localId, name: pt || name, nameEn: name, image, imageEn: image.replace('/pt/', '/en/'), setId, setName,
       rank: rank.has(setId) ? rank.get(setId) : 1e6, num: parseInt(localId, 10) || 0, hay: fold(`${name} ${pt || ''} ${setName} ${setId}`) };
   }).sort((a, b) => a.rank - b.rank || a.num - b.num || a.localId.localeCompare(b.localId));
 });
+const catalogImages = () => once('catalogImages', async () => new Map((await getCatalog()).filter(c => c.image).map(c => [c.id, c.image])));
 // Cada palavra precisa aparecer; número puro também casa com o número da carta ("charizard 125").
 function exploreHits(all) {
   const words = fold(route.q).split(' ').filter(Boolean);
