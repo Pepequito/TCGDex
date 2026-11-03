@@ -1,5 +1,5 @@
-const SHELL = 'fichario-shell-13', RUNTIME = 'fichario-runtime-1';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'views.js', 'desk.js', 'sync.js', 'social.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon-180.png', 'data/index.json', 'data/hashes.bin', 'data/set-logos.json', 'data/catalog.json'];
+const SHELL = 'fichario-shell-14', RUNTIME = 'fichario-runtime-1';
+const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'views.js', 'desk.js', 'sync.js', 'social.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon.svg', 'icons/favicon-64.png', 'data/index.json', 'data/hashes.bin', 'data/set-logos.json', 'data/catalog.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

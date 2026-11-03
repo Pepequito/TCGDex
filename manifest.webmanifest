@@ -1,6 +1,6 @@
 {
-  "name": "Fichário",
-  "short_name": "Fichário",
+  "name": "Boosterz",
+  "short_name": "Boosterz",
   "description": "Coleção de Pokémon TCG com scanner e preços.",
   "lang": "pt-BR",
   "start_url": "./",

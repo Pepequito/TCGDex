@@ -69,7 +69,7 @@ window.Social = (() => {
   }
   async function share() {
     const url = link(mine.username);
-    try { if (navigator.share) { await navigator.share({ title: `${trainerName()} no Fichário`, url }); return; } } catch { return; }
+    try { if (navigator.share) { await navigator.share({ title: `${trainerName()} no Boosterz`, url }); return; } } catch { return; }
     try { await navigator.clipboard.writeText(url); toast('Link do perfil copiado'); }
     catch { toast(url); }
   }
@@ -191,7 +191,7 @@ window.Social = (() => {
         ${sorted.length ? `<div class="binder">${sorted.slice(0, 300).map(c => `<button type="button" class="pocket catalog" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${store.cards[c.id] ? '<span class="have">✓</span>' : ''}</button>`).join('')}</div>`
           : '<p class="muted">Ainda sem cartas.</p>'}</div>`
         : p.privacy === 'showcase' ? '<p class="muted">Este perfil mostra só a vitrine.</p>' : ''}
-      ${!me ? '<div class="empty"><h2>Monte o seu Fichário</h2><p class="muted">Escaneie suas cartas, acompanhe o valor e siga seus amigos.</p><button class="btn" type="button" data-tab="settings">Criar minha conta</button></div>' : ''}`;
+      ${!me ? '<div class="empty"><h2>Comece sua coleção no Boosterz</h2><p class="muted">Escaneie suas cartas, acompanhe o valor e siga seus amigos.</p><button class="btn" type="button" data-tab="settings">Criar minha conta</button></div>' : ''}`;
   }
   function openFromHash() {
     const h = decodeURIComponent(location.hash || '');

@@ -1,4 +1,4 @@
-# Fichário
+# Boosterz
 
 App web (PWA) para colecionar Pokémon TCG: escaneia cartas, mostra preços e acompanha o progresso de cada set.
 

@@ -623,7 +623,7 @@ async function fromPhoto(file) {
 
 /* ---------- Backup ---------- */
 async function exportBackup() {
-  const name = `fichario-${new Date().toISOString().slice(0, 10)}.json`;
+  const name = `boosterz-${new Date().toISOString().slice(0, 10)}.json`;
   const blob = new Blob([JSON.stringify({ app: 'fichario', version: 1, cards: store.cards, profile: store.profile }, null, 1)], { type: 'application/json' });
   const file = new File([blob], name, { type: 'application/json' });
   if (navigator.canShare?.({ files: [file] })) {
@@ -644,7 +644,7 @@ async function importBackup(file) {
     save(); render();
     window.Sync?.changedAll(Object.keys(data.cards));
     toast(`${Object.keys(data.cards).length} cartas importadas`);
-  } catch { toast('Esse arquivo não é um backup do Fichário.'); }
+  } catch { toast('Esse arquivo não é um backup do Boosterz.'); }
 }
 
 /* ---------- Eventos ---------- */

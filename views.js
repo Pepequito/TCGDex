@@ -113,7 +113,7 @@ async function renderHome() {
     <div class="section"><div class="section-head"><h2>Mais valiosas</h2></div><div class="rail">${top.map(c => railCard(c, money(valueOf(c)))).join('')}</div></div>
     <div class="section"><div class="section-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div><div class="tiles" id="mySets"></div></div>
     <div class="section"><div class="section-head"><h2>Adicionadas recentemente</h2></div><div class="rail">${recent.map(c => railCard(c)).join('')}</div></div>`
-    : `<div class="empty"><h2>Seu fichário está vazio</h2>
+    : `<div class="empty"><h2>Sua coleção está vazia</h2>
        <p class="muted">Aponte a câmera para a primeira carta. O app reconhece a arte e você confirma antes de adicionar.</p>
        <button class="btn" type="button" data-scan>Escanear a primeira carta</button></div>`}`;
   bindChart();
@@ -282,7 +282,7 @@ function achievements(completed) {
   return [
     ['card', 'Primeira carta', 'Adicione sua primeira carta', copies >= 1],
     ['stack', 'Colecionador', 'Tenha 50 cartas', copies >= 50],
-    ['stack', 'Fichário cheio', 'Tenha 250 cartas', copies >= 250],
+    ['stack', 'Pasta cheia', 'Tenha 250 cartas', copies >= 250],
     ['stack', 'Mestre das pastas', 'Tenha 1.000 cartas', copies >= 1000],
     ['crown', 'Set completo', 'Complete um set inteiro', completed >= 1],
     ['crown', 'Tricampeão', 'Complete 3 sets', completed >= 3],
@@ -531,3 +531,4 @@ document.addEventListener('submit', e => {
 render();
 refreshFx();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+setTimeout(() => { const s = $('#splash'); s?.classList.add('out'); setTimeout(() => s?.remove(), 400); }, 450);
