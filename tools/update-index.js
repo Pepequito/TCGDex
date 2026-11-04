@@ -36,9 +36,9 @@ async function fetchRetry(url, tries = 3) {
     // Usa as imagens do catálogo, inclusive as que tools/find-images.js recuperou.
     const cat = JSON.parse(fs.readFileSync(path.join(dir, 'catalog.json'), 'utf8'));
     queue = cat.cards.filter(([id, , p]) => p >= 0 && !have.has(id)).map(([id, , p]) => {
-      const local = id.slice(id.lastIndexOf('-') + 1), lg = id.startsWith('ja:') ? 'ja' : 'en';
+      const local = id.slice(id.lastIndexOf('-') + 1), lg = id.startsWith('zhcn:') ? 'zh-cn' : id.startsWith('zh:') ? 'zh-tw' : id.startsWith('ja:') ? 'ja' : 'en';
       const base = cat.paths[p];
-      return { id: id.replace(/^ja:/, ''), key: id, lg, image: base.startsWith('http') ? base : `https://assets.tcgdex.net/${base}/${local}` };
+      return { id: id.replace(/^(ja|zh|zhcn):/, ''), key: id, lg, image: base.startsWith('http') ? base : `https://assets.tcgdex.net/${base}/${local}` };
     });
   } else {
     const all = await (await fetchRetry(`https://api.tcgdex.net/v2/${lang}/cards`)).json();

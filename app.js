@@ -28,23 +28,39 @@ function once(key, fn) {
   if (!memo.has(key)) memo.set(key, fn().catch(e => { memo.delete(key); throw e; }));
   return memo.get(key);
 }
-// Cartas japonesas têm numeração própria e ficam separadas pelo prefixo ja:.
-const isJa = id => String(id).startsWith('ja:');
-const jaRaw = id => id.slice(3);
+// Edições asiáticas têm numeração própria e ficam separadas por prefixo no id: ja: (japonês),
+// zh: (chinês tradicional, Taiwan e Hong Kong) e zhcn: (chinês simplificado).
+const ASIAN = {
+  'ja:': { api: 'ja', label: 'Japonesa', tag: 'JP', region: 'ja' },
+  'zh:': { api: 'zh-tw', label: 'Chinesa', tag: 'TW', region: 'zh' },
+  'zhcn:': { api: 'zh-cn', label: 'Chinesa simplificada', tag: 'CN', region: 'zh' },
+};
+const langOf = id => Object.keys(ASIAN).find(p => String(id).startsWith(p)) || '';
+const isJa = id => langOf(id) === 'ja:';
+const isAsian = id => !!langOf(id);
+const rawOf = id => String(id).slice(langOf(id).length);
+const jaRaw = rawOf;
+const regionOf = id => ASIAN[langOf(id)]?.region || 'west';
+const tagOf = id => ASIAN[langOf(id)]?.tag || '';
+const langLabel = id => ASIAN[langOf(id)]?.label || '';
+const dirOf = id => ASIAN[langOf(id)]?.api || 'en';
+// Nomes em português (padrão) ou em inglês, escolhido em Ajustes.
+const preferName = (pt, en) => (store.namesEn ? en || pt : pt || en || '').trim();
 const isPocket = id => /^(A|B)\d+[a-z]?$|^P-/.test(id);
 
 // A lista em inglês é a mais completa; os nomes em português entram por cima quando existem.
 const getSets = () => once('sets', async () => {
-  const [en, pt, ja, extra] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON(`${API}/ja/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({}))]);
+  const asianLists = Object.entries(ASIAN).map(([pre, L]) => getJSON(`${API}/${L.api}/sets`).then(list => list.map(s => ({ ...s, pre }))).catch(() => []));
+  const [en, pt, extra, ...asian] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({})), ...asianLists]);
   const ptById = new Map(pt.map(s => [s.id, s]));
   return en.filter(s => !isPocket(s.id)).map(s => ({
-    id: s.id, nameEn: s.name, name: (ptById.get(s.id)?.name || s.name).trim(),
-    official: s.cardCount.official, total: s.cardCount.total, logo: ptById.get(s.id)?.logo || s.logo, logoUrl: extra[s.id],
+    id: s.id, nameEn: s.name, name: preferName(ptById.get(s.id)?.name, s.name),
+    official: s.cardCount.official, total: s.cardCount.total, logo: ptById.get(s.id)?.logo || s.logo, logoAlt: s.logo, logoUrl: extra[s.id],
     symbol: s.symbol || ptById.get(s.id)?.symbol,
     serie: /assets\.tcgdex\.net\/(?:en|pt|univ)\/([^/]+)\//.exec(s.logo || s.symbol || '')?.[1] || /^(me|swsh|sv|sm|xy|bw|hgss|dp|pl|ex|neo|base|gym|ecard)/.exec(s.id)?.[1] || '',
-  })).reverse().concat(ja.filter(s => !isPocket(s.id)).map(s => ({
-    id: 'ja:' + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo,
-  })).reverse());
+  })).reverse().concat(...asian.map(list => list.filter(s => !isPocket(s.id)).map(s => ({
+    id: s.pre + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo,
+  })).reverse()));
 });
 // Cartas cadastradas à mão ficam num set próprio, montado a partir da coleção.
 const customSet = () => {
@@ -65,37 +81,37 @@ async function withImages(cards) {
 const fillSet = async set => { await withImages(set.cards); return set; };
 const fillCard = async card => (await withImages([card]))[0];
 const getSet = id => id === 'custom' ? Promise.resolve(customSet()) : once('set:' + id, async () => {
-  if (isJa(id)) {
-    const ja = await getJSON(`${API}/ja/sets/${jaRaw(id)}`);
+  if (isAsian(id)) {
+    const pre = langOf(id), as = await getJSON(`${API}/${ASIAN[pre].api}/sets/${rawOf(id)}`);
     return fillSet({
-      id, name: ja.name, official: ja.cardCount.official, total: ja.cardCount.total, abbr: '', tcgOnline: '',
-      cards: ja.cards.map(c => ({ id: 'ja:' + c.id, localId: c.localId, name: c.name, nameEn: c.name, image: c.image, imageEn: c.image, setId: id })),
+      id, name: as.name, official: as.cardCount.official, total: as.cardCount.total, abbr: '', tcgOnline: '',
+      cards: as.cards.map(c => ({ id: pre + c.id, localId: c.localId, name: c.name, nameEn: c.name, image: c.image, imageEn: c.image, setId: id })),
     });
   }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/sets/${id}`), getJSON(`${API}/pt/sets/${id}`).catch(() => null)]);
   const ptCards = new Map((pt?.cards || []).map(c => [c.localId, c]));
   return fillSet({
-    id, name: pt?.name || en.name, official: en.cardCount.official, total: en.cardCount.total,
+    id, name: preferName(pt?.name, en.name), official: en.cardCount.official, total: en.cardCount.total,
     abbr: en.abbreviation?.official || '', tcgOnline: en.tcgOnline || '',
     cards: en.cards.map(c => {
       const p = ptCards.get(c.localId);
-      return { id: c.id, localId: c.localId, name: p?.name || c.name, nameEn: c.name, image: p?.image || c.image, imageEn: c.image, setId: id };
+      return { id: c.id, localId: c.localId, name: preferName(p?.name, c.name), nameEn: c.name, image: p?.image || c.image, imageEn: c.image, setId: id };
     }),
   });
 });
 const getCard = id => once('card:' + id, async () => {
-  if (isJa(id)) {
-    const ja = await getJSON(`${API}/ja/cards/${jaRaw(id)}`);
+  if (isAsian(id)) {
+    const pre = langOf(id), as = await getJSON(`${API}/${ASIAN[pre].api}/cards/${rawOf(id)}`);
     return fillCard({
-      id, localId: ja.localId, name: ja.name, nameEn: ja.name, image: ja.image, imageEn: ja.image,
-      rarity: ja.rarity || '', setId: 'ja:' + ja.set.id, setName: ja.set.name,
-      variants: Object.keys(VARIANTS).filter(v => ja.variants?.[v]), prices: extractPrices(ja),
+      id, localId: as.localId, name: as.name, nameEn: as.name, image: as.image, imageEn: as.image,
+      rarity: as.rarity || '', setId: pre + as.set.id, setName: as.set.name,
+      variants: Object.keys(VARIANTS).filter(v => as.variants?.[v]), prices: extractPrices(as),
     });
   }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/cards/${id}`), getJSON(`${API}/pt/cards/${id}`).catch(() => null)]);
   return fillCard({
-    id, localId: en.localId, name: pt?.name || en.name, nameEn: en.name, image: pt?.image || en.image, imageEn: en.image,
-    rarity: pt?.rarity || en.rarity || '', setId: en.set.id, setName: pt?.set?.name || en.set.name,
+    id, localId: en.localId, name: preferName(pt?.name, en.name), nameEn: en.name, image: pt?.image || en.image, imageEn: en.image,
+    rarity: store.namesEn ? en.rarity || '' : pt?.rarity || en.rarity || '', setId: en.set.id, setName: preferName(pt?.set?.name, en.set.name),
     variants: Object.keys(VARIANTS).filter(v => en.variants?.[v]),
     prices: extractPrices(en),
   });
@@ -495,12 +511,12 @@ async function matchArt(src, W, H, rot = 0, limit = 6) {
     }
   }
   return shortlist.sort((a, b) => best[a] - best[b]).slice(0, limit).map(i => {
-    const [id, p] = cards[i], localId = id.slice(id.lastIndexOf('-') + 1), image = paths[p].startsWith('http') ? paths[p] : `https://assets.tcgdex.net/${isJa(id) ? 'ja' : 'en'}/${paths[p]}/${localId}`;
+    const [id, p] = cards[i], localId = id.slice(id.lastIndexOf('-') + 1), image = paths[p].startsWith('http') ? paths[p] : `https://assets.tcgdex.net/${dirOf(id)}/${paths[p]}/${localId}`;
     return { id, localId, name: id, image, imageEn: image, dist: best[i] };
   });
 }
 // Sem código legível, entre artes empatadas vale o idioma da última carta adicionada.
-const preferred = (c, cards) => +(cards[0].dist <= 28 && c.dist - cards[0].dist <= 2 && isJa(c.id) === !!store.lastJa);
+const preferred = (c, cards) => +(cards[0].dist <= 28 && c.dist - cards[0].dist <= 2 && langOf(c.id) === (store.lastLang ?? (store.lastJa ? 'ja:' : '')));
 const setIdOf = id => id.replace(/-[^-]+$/, '');
 // Nome, sigla, total oficial e logo de cada coleção candidata.
 async function setFacts(ids) {
@@ -509,7 +525,7 @@ async function setFacts(ids) {
     const meta = sets.find(x => x.id === sid);
     let abbr = '', cards = [];
     try { const full = await getSet(sid); abbr = full.abbr || ''; cards = full.cards; } catch { /* sem sigla */ }
-    out[sid] = { name: meta?.name || sid, official: meta?.official || 0, abbr, art: meta ? setArt(meta) : '', cards };
+    out[sid] = { name: meta?.name || sid, official: meta?.official || 0, abbr, art: meta ? setArt(meta) : '', next: meta ? artFallback(meta) : '', cards };
   }));
   return out;
 }
@@ -623,8 +639,8 @@ function showMatch({ cards }, resume = true) {
   const option = (c, i) => {
     const f = facts[setIdOf(c.id)] || {}, code = [f.abbr, c.localId + (f.official ? '/' + f.official : '')].filter(Boolean).join(' · ');
     return `<button type="button" class="set-option${picked && i === idx ? ' on' : ''}" data-alt="${i}">
-      <span class="mini-logo${f.art ? '' : ' nologo'}">${f.art ? `<img alt="" src="${esc(f.art)}" data-logo>` : ''}<em>${esc(f.abbr || setCode({ id: setIdOf(c.id), name: f.name || '' }))}</em></span>
-      <span class="grow"><b>${esc(f.name || '')}</b><span class="muted small">${esc(code)}${isJa(c.id) ? ' · Japonesa' : ''}</span></span></button>`;
+      <span class="mini-logo${f.art ? '' : ' nologo'}">${f.art ? `<img alt="" src="${esc(f.art)}" data-next="${f.next || ''}" data-logo>` : ''}<em>${esc(f.abbr || setCode({ id: setIdOf(c.id), name: f.name || '' }))}</em></span>
+      <span class="grow"><b>${esc(f.name || '')}</b><span class="muted small">${esc(code)}${langLabel(c.id) ? ' · ' + langLabel(c.id) : ''}</span></span></button>`;
   };
   const draw = async () => {
     openSheet('<p class="muted">Buscando carta e preço…</p>', onDone);
@@ -638,7 +654,7 @@ function showMatch({ cards }, resume = true) {
       : `Esta arte existe em ${same} coleções. Confira o código no canto inferior da carta e escolha:`}</p>
       <div class="set-options">${cards.slice(0, same).map(option).join('')}</div></div>` : '';
     const alts = others.length ? `<div class="section"><span class="muted small">Não é essa carta? Escolha outra:</span>
-      <div class="alts">${others.map((c, k) => `<button type="button" data-alt="${same + k}" aria-label="${esc(c.name)}${isJa(c.id) ? ', japonesa' : ''}">${imgTag(c)}${isJa(c.id) ? '<span class="lang">JP</span>' : ''}</button>`).join('')}</div></div>` : '';
+      <div class="alts">${others.map((c, k) => `<button type="button" data-alt="${same + k}" aria-label="${esc(c.name)}${langLabel(c.id) ? ', ' + langLabel(c.id).toLowerCase() : ''}">${imgTag(c)}${tagOf(c.id) ? `<span class="lang">${tagOf(c.id)}</span>` : ''}</button>`).join('')}</div></div>` : '';
     const variant = (detail.variants.length ? VARIANTS[detail.variants[0]].label : 'Normal').toLowerCase();
     sheet.innerHTML = `${cardHead(picked ? detail : { ...detail, setName: "Coleção a confirmar", localId: "?" })}${choose}<div id="variants">${variantRows(detail)}</div>${picked ? gradedBlock(detail) : ''}${alts}${cardExtras(detail)}
       <div class="sheet-actions">
@@ -648,7 +664,7 @@ function showMatch({ cards }, resume = true) {
     $$('[data-alt]', sheet).forEach(b => b.onclick = () => { idx = +b.dataset.alt; picked = true; draw(); });
     $('[data-add]', sheet)?.addEventListener('click', () => {
       if (!sheetArmed()) return;
-      store.lastJa = isJa(detail.id);
+      store.lastLang = langOf(detail.id);
       setQty(detail, detail.variants[0] || 'normal', 1);
       toast(`${detail.name} adicionada em ${detail.setName}`);
       closeSheet();

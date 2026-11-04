@@ -82,16 +82,20 @@ function railCard(c, label) {
     <b>${esc(c.name)}</b>${label ? `<span class="price">${label}</span>` : ''}</button>`;
 }
 // Sem logo oficial, vale o símbolo do set; sem símbolo, o código impresso nas cartas ou as iniciais.
-const setCode = s => isJa(s.id) ? jaRaw(s.id) : s.name.split(/\s+/).filter(w => /^[\p{L}\d]/u.test(w) && w.length > 2).map(w => w[0]).join('').slice(0, 4).toUpperCase();
-const setArt = s => s.logoUrl || (s.logo ? `${s.logo}.webp` : '');
+const setCode = s => isAsian(s.id) ? rawOf(s.id) : s.name.split(/\s+/).filter(w => /^[\p{L}\d]/u.test(w) && w.length > 2).map(w => w[0]).join('').slice(0, 4).toUpperCase();
+const setArts = s => [...new Set([s.logo && s.logo + '.webp', s.logoAlt && s.logoAlt + '.webp', s.logoUrl].filter(Boolean))];
+const setArt = s => setArts(s)[0] || '';
+const artFallback = s => esc(setArts(s).slice(1).join('|'));
 function setTile(s, have) {
   const size = s.total || s.official || 1, pct = Math.min(100, have / size * 100), art = setArt(s);
   return `<button class="set-tile${have >= size ? ' done' : ''}" type="button" data-set="${esc(s.id)}">
-    <span class="logo${art ? '' : ' nologo'}">${art ? `<img loading="lazy" alt="" data-logo src="${esc(art)}">` : ''}<em>${esc(setCode(s))}</em></span>
+    <span class="logo${art ? '' : ' nologo'}">${art ? `<img loading="lazy" alt="" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : ''}<em>${esc(setCode(s))}</em></span>
     <b>${esc(s.name)}</b><span class="bar"><i style="width:${pct}%"></i></span>
     <span class="count"><span>${have}/${size}</span><span>${Math.floor(pct)}%</span></span></button>`;
 }
 document.addEventListener('error', e => {
+  const next = e.target.dataset?.next;
+  if (next) { const [first, ...rest] = next.split('|'); e.target.dataset.next = rest.join('|'); e.target.src = first; return; }
   if (e.target.dataset?.hideBroken !== undefined) { e.target.remove(); return; }
   if (e.target.dataset?.logo === undefined) return;
   e.target.parentElement.classList.add('nologo'); e.target.remove();
@@ -133,7 +137,7 @@ async function renderHome() {
 /* ---------- Sets ---------- */
 async function renderSets() {
   view.innerHTML = `<h1>Sets</h1><input id="setFilter" class="field" type="search" placeholder="Procurar set" aria-label="Procurar set" value="${esc(route.q)}" autocomplete="off">
-    <div class="seg" role="group" aria-label="Quais sets mostrar">${[['west', 'Ocidentais'], ['ja', 'Japoneses'], ['mine', 'Meus']].map(([k, l]) => `<button type="button" data-region="${k}" class="${route.region === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="seg" role="group" aria-label="Quais sets mostrar">${[['west', 'Ocidentais'], ['ja', 'Japoneses'], ['zh', 'Chineses'], ['mine', 'Meus']].map(([k, l]) => `<button type="button" data-region="${k}" class="${route.region === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div id="setList" class="section"><p class="muted">Carregando sets…</p></div>`;
   const draw = (sets, series) => {
     const q = norm($('#setFilter')?.value || ''), owned = ownedBySet(), box = $('#setList');
@@ -145,9 +149,9 @@ async function renderSets() {
       box.innerHTML = hits.length ? `<div class="tiles">${hits.map(s => setTile(s, owned[s.id])).join('')}</div>` : '<p class="muted">Nenhum set seu com esse nome.</p>';
       return;
     }
-    const hits = sets.filter(s => isJa(s.id) === (route.region === 'ja') && match(s));
+    const hits = sets.filter(s => regionOf(s.id) === route.region && match(s));
     if (!hits.length) { box.innerHTML = '<p class="muted">Nenhum set com esse nome.</p>'; return; }
-    if (route.region === 'ja') { box.innerHTML = `<div class="tiles">${hits.map(s => setTile(s, owned[s.id] || 0)).join('')}</div>`; return; }
+    if (route.region !== 'west') { box.innerHTML = `<div class="tiles">${hits.map(s => setTile(s, owned[s.id] || 0)).join('')}</div>`; return; }
     const groups = new Map();
     for (const s of hits) { const k = s.serie || 'outros'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
     box.innerHTML = [...groups].sort((a, b) => (a[0] === 'outros') - (b[0] === 'outros')).map(([k, g]) => `<div class="group"><h2>${esc(series[k] || 'Outras coleções')}</h2><div class="tiles">${g.map(s => setTile(s, owned[s.id] || 0)).join('')}</div></div>`).join('');
@@ -179,7 +183,7 @@ async function renderSet() {
   const left = inScope.length - have, pct = inScope.length ? have / inScope.length * 100 : 0;
   const value = list().filter(c => c.setId === s.id).reduce((a, c) => a + valueOf(c), 0);
   view.innerHTML = `${back}
-    <div class="set-hero">${logo ? `<img alt="" src="${esc(logo)}" data-hide-broken>` : ''}<h1>${esc(s.name)}</h1>
+    <div class="set-hero">${logo ? `<img alt="" src="${esc(logo)}" data-next="${info ? artFallback(info) : ''}" data-hide-broken>` : ''}<h1>${esc(s.name)}</h1>
       <div class="stats">${ring(pct, !left)}<p><b>${money(value)}</b><span class="muted">${left ? `Faltam ${left} de ${inScope.length}` : 'Set completo'}</span></p></div></div>
     <div class="controls">
       <div class="seg" role="group" aria-label="Quais cartas contam">
@@ -210,7 +214,7 @@ const getCatalog = () => once('catalog', async () => {
     const setId = id.replace(/-[^-]+$/, ''), localId = id.slice(id.lastIndexOf('-') + 1);
     const base = cat.paths[p], image = p < 0 ? '' : base.startsWith('http') ? base : `https://assets.tcgdex.net/${base}/${localId}`;
     const setName = names.get(setId) || setId;
-    return { id, localId, name: pt || name, nameEn: name, image, imageEn: image.replace('/pt/', '/en/'), setId, setName,
+    return { id, localId, name: preferName(pt, name), nameEn: name, image, imageEn: image.replace('/pt/', '/en/'), setId, setName,
       rank: rank.has(setId) ? rank.get(setId) : 1e6, num: parseInt(localId, 10) || 0, hay: fold(`${name} ${pt || ''} ${setName} ${setId}`) };
   }).sort((a, b) => a.rank - b.rank || a.num - b.num || a.localId.localeCompare(b.localId));
 });
@@ -219,21 +223,21 @@ const catalogImages = () => once('catalogImages', async () => new Map((await get
 function exploreHits(all) {
   const words = fold(route.q).split(' ').filter(Boolean);
   return all.filter(c => (!explore.set || c.setId === explore.set)
-    && (!explore.kind || (explore.kind === 'ja') === isJa(c.id))
+    && (!explore.kind || explore.kind === regionOf(c.id))
     && (!explore.own || (explore.own === 'have') === !!store.cards[c.id])
     && words.every(w => /^\d+$/.test(w) ? c.num === +w || c.hay.includes(w) : c.hay.includes(w)));
 }
 function catalogPocket(c) {
   const own = store.cards[c.id];
   return `<button type="button" class="pocket catalog" data-card="${esc(c.id)}" aria-label="${esc(c.name)}, ${esc(c.setName)} ${esc(c.localId)}${own ? ', na coleção' : ''}">
-    ${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${own ? `<span class="have">✓${qtyOf(own) > 1 ? ' ' + qtyOf(own) : ''}</span>` : ''}${isJa(c.id) ? '<span class="lang-tag">JP</span>' : ''}</button>`;
+    ${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${own ? `<span class="have">✓${qtyOf(own) > 1 ? ' ' + qtyOf(own) : ''}</span>` : ''}${tagOf(c.id) ? `<span class="lang-tag">${tagOf(c.id)}</span>` : ''}</button>`;
 }
 async function renderSearch() {
   view.innerHTML = `<div class="page-head"><div><h1>Explorar</h1><span class="muted" id="exploreCount">Carregando o catálogo…</span></div></div>
     <form id="exploreForm" class="explore-bar" role="search">
       <input id="exploreQ" class="field" type="search" enterkeyhint="search" placeholder="Nome ou número, como Charizard 125" aria-label="Buscar carta" value="${esc(route.q)}" autocomplete="off">
       <select id="exploreSet" class="field" aria-label="Set"><option value="">Todos os sets</option></select>
-      <select id="exploreKind" class="field" aria-label="Edição"><option value="">Todas as edições</option><option value="west"${explore.kind === 'west' ? ' selected' : ''}>Ocidentais</option><option value="ja"${explore.kind === 'ja' ? ' selected' : ''}>Japonesas</option></select>
+      <select id="exploreKind" class="field" aria-label="Edição"><option value="">Todas as edições</option><option value="west"${explore.kind === 'west' ? ' selected' : ''}>Ocidentais</option><option value="ja"${explore.kind === 'ja' ? ' selected' : ''}>Japonesas</option><option value="zh"${explore.kind === 'zh' ? ' selected' : ''}>Chinesas</option></select>
       <select id="exploreOwn" class="field" aria-label="Coleção"><option value="">Todas as cartas</option><option value="have"${explore.own === 'have' ? ' selected' : ''}>Só as que tenho</option><option value="miss"${explore.own === 'miss' ? ' selected' : ''}>Só as que faltam</option></select>
     </form>
     <div id="exploreOut" class="section"></div>
@@ -242,7 +246,7 @@ async function renderSearch() {
     const [all, sets] = await Promise.all([getCatalog(), getSets().catch(() => [])]);
     if (route.tab !== 'search') return;
     const pick = $('#exploreSet');
-    pick.innerHTML += sets.map(s => `<option value="${esc(s.id)}"${explore.set === s.id ? ' selected' : ''}>${esc(s.name)}${isJa(s.id) ? ' (JP)' : ''}</option>`).join('');
+    pick.innerHTML += sets.map(s => `<option value="${esc(s.id)}"${explore.set === s.id ? ' selected' : ''}>${esc(s.name)}${tagOf(s.id) ? ` (${tagOf(s.id)})` : ''}</option>`).join('');
     drawExplore(all);
   } catch { $('#exploreCount').textContent = 'Não consegui carregar o catálogo. Verifique a conexão.'; }
 }
@@ -291,7 +295,7 @@ function achievements(completed) {
     ['gem', 'Achado raro', 'Tenha uma carta de R$ 100', cards.some(c => brl(valueOf(c) / qtyOf(c)) >= 100)],
     ['gem', 'Tesouro', 'Coleção de R$ 1.000', total >= 1000],
     ['gem', 'Cofre', 'Coleção de R$ 10.000', total >= 10000],
-    ['flag', 'Além-mar', 'Tenha uma carta japonesa', cards.some(c => isJa(c.id))],
+    ['flag', 'Além-mar', 'Tenha uma carta japonesa ou chinesa', cards.some(c => isAsian(c.id))],
     ['star', 'Curador', 'Monte a vitrine com 3 cartas', showcaseCards().length >= 3],
   ];
 }
@@ -376,6 +380,9 @@ function renderSettings() {
   const when = store.pricedAt ? new Date(store.pricedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'ainda não feita';
   view.innerHTML = `<button class="back" type="button" data-tab="profile">‹ Perfil</button><h1>Ajustes</h1>
     <div class="panel section" id="account"></div>
+    <div class="panel"><h2>Nomes das cartas e sets</h2>
+      <div class="seg" role="group" aria-label="Idioma dos nomes">${[['pt', 'Português'], ['en', 'English']].map(([k, l]) => `<button type="button" data-names="${k}" class="${(store.namesEn ? 'en' : 'pt') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <p class="muted small">Cartas japonesas e chinesas mantêm o nome original. Quando a base não tem a tradução em português, aparece o nome em inglês.</p></div>
     <div class="panel"><h2>Moeda</h2>
       <div class="seg" role="group" aria-label="Moeda">${['BRL', 'USD', 'EUR'].map(c => `<button type="button" data-currency="${c}" class="${store.currency === c ? 'on' : ''}">${c}</button>`).join('')}</div>
       <p class="muted small">Os preços vêm da TCGplayer (EUA) e da Cardmarket (Europa) e são convertidos pela cotação do dia. O mercado brasileiro pode praticar valores diferentes.${store.fx ? ` US$ 1 = R$ ${store.fx.BRL.toFixed(2).replace('.', ',')}.` : ''}</p></div>
@@ -388,6 +395,24 @@ function renderSettings() {
       <p class="muted small">Sem conta, a coleção fica só neste iPhone. Exporte de vez em quando e guarde o arquivo no iCloud Drive.</p></div>
     <p class="muted small">Dados de cartas: TCGdex. Reconhecimento feito no próprio aparelho. Projeto pessoal, sem vínculo com The Pokémon Company ou Nintendo.</p>`;
   window.Sync?.paint();
+}
+
+// Troca o idioma dos nomes: recarrega as listas e renomeia as cartas já salvas pelo catálogo.
+async function setNameLanguage(en) {
+  if (!!store.namesEn === en) return;
+  store.namesEn = en;
+  memo.clear();
+  try {
+    const [all, sets] = await Promise.all([getCatalog(), getSets()]);
+    const byId = new Map(all.map(c => [c.id, c])), setNames = new Map(sets.map(s => [s.id, s.name]));
+    for (const c of list()) {
+      if (c.setId === 'custom') continue;
+      if (byId.get(c.id)) c.name = byId.get(c.id).name;
+      if (setNames.get(c.setId)) c.setName = setNames.get(c.setId);
+    }
+  } catch { toast('Sem conexão: os nomes mudam quando a internet voltar'); }
+  save();
+  render();
 }
 
 /* ---------- Painel da carta ---------- */
@@ -481,7 +506,7 @@ function variantRows(card) {
 }
 function cardHead(card) {
   return `<div class="card-show"><div class="holo" data-tilt>${imgTag(card, 'high', card.name)}</div><div class="info"><h2>${esc(card.name)}</h2>
-    <span class="muted">${esc(card.setName)}${isJa(card.id) ? ' · Japonesa' : ''}</span><span class="num small muted">Nº ${esc(card.localId)}</span>
+    <span class="muted">${esc(card.setName)}${langLabel(card.id) ? ' · ' + langLabel(card.id) : ''}</span><span class="num small muted">Nº ${esc(card.localId)}</span>
     ${card.rarity ? `<span class="rarity">${esc(card.rarity)}</span>` : ''}</div></div>`;
 }
 async function showCard(id) {
@@ -525,6 +550,7 @@ document.addEventListener('click', e => {
   else if (d.editProfile !== undefined) { pendingPhoto = undefined; editProfile(); }
   else if (d.show) { if (toggleShowcase(d.show)) b.classList.toggle('on'); }
   else if (d.star !== undefined && sheetCard) { toggleShowcase(sheetCard.id); $('#extras').outerHTML = cardExtras(sheetCard); }
+  else if (d.names) setNameLanguage(d.names === 'en');
   else if (d.more !== undefined) { explore.shown += PAGE; drawExplore(); }
   else if (d.addCard !== undefined && sheetCard) {
     setQty(sheetCard, sheetCard.variants[0] || 'normal', 1);

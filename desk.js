@@ -25,7 +25,7 @@ window.Desk = (() => {
   function setRow(s, have) {
     const size = s.total || s.official || 1, pct = Math.min(100, have / size * 100), art = setArt(s);
     return `<button class="set-row${have >= size ? ' done' : ''}" type="button" data-set="${esc(s.id)}">
-      <span class="mini-logo${art ? '' : ' nologo'}">${art ? `<img alt="" loading="lazy" data-logo src="${esc(art)}">` : ''}<em>${esc(setCode(s))}</em></span>
+      <span class="mini-logo${art ? '' : ' nologo'}">${art ? `<img alt="" loading="lazy" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : ''}<em>${esc(setCode(s))}</em></span>
       <span class="grow"><b>${esc(s.name)}</b><span class="bar"><i style="width:${pct}%"></i></span></span>
       <span class="num muted">${have}/${size}</span></button>`;
   }
@@ -69,7 +69,7 @@ window.Desk = (() => {
   }
 
   /* ---------- Minhas cartas ---------- */
-  const kindOf = c => c.setId === 'custom' ? 'custom' : isJa(c.id) ? 'ja' : 'west';
+  const kindOf = c => c.setId === 'custom' ? 'custom' : regionOf(c.id);
   const unit = c => qtyOf(c) ? valueOf(c) / qtyOf(c) : 0;
   const COLS = [
     ['name', 'Carta', c => c.name],
@@ -91,7 +91,7 @@ window.Desk = (() => {
     const r = rows(), copies = r.reduce((a, c) => a + qtyOf(c), 0), total = r.reduce((a, c) => a + valueOf(c), 0);
     const body = r.map(c => `<tr data-card="${esc(c.id)}" tabindex="0">
       <td><span class="cell-card"><span class="thumb">${imgTag(c, 'low', '')}</span><b>${esc(c.name)}</b>${(c.graded || []).map(g => ` <span class="pill slab-pill">${esc(gradeLabel(g))}</span>`).join('')}${store.profile.showcase.includes(c.id) ? '<span class="star-mark" title="Na vitrine">★</span>' : ''}</span></td>
-      <td>${esc(c.setName)}${isJa(c.id) ? ' <span class="pill">JP</span>' : ''}</td><td class="num">${esc(c.localId)}</td><td class="muted col-rarity">${esc(c.rarity || '—')}</td>
+      <td>${esc(c.setName)}${tagOf(c.id) ? ` <span class="pill">${tagOf(c.id)}</span>` : ''}</td><td class="num">${esc(c.localId)}</td><td class="muted col-rarity">${esc(c.rarity || '—')}</td>
       <td class="num right">${qtyOf(c)}</td><td class="num right">${money(unit(c))}${c.custom != null ? ' <span class="pill">seu</span>' : ''}</td><td class="num right"><b>${money(valueOf(c))}</b></td></tr>`).join('');
     return `<tbody>${body || '<tr><td colspan="7" class="muted empty-row">Nenhuma carta com esses filtros.</td></tr>'}</tbody>
       <tfoot><tr><td colspan="3">${plural(r.length, 'carta diferente', 'cartas diferentes')}</td><td class="col-rarity"></td><td class="num right">${copies}</td><td></td><td class="num right"><b>${money(total)}</b></td></tr></tfoot>`;
@@ -107,7 +107,7 @@ window.Desk = (() => {
       <div class="toolbar">
         <input id="cardFilter" class="field" type="search" placeholder="Filtrar por nome ou set" aria-label="Filtrar cartas" value="${esc(filter.q)}" autocomplete="off">
         <select id="cardSet" class="field" aria-label="Set"><option value="">Todos os sets</option>${[...sets].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR')).map(([id, name]) => `<option value="${esc(id)}"${filter.set === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select>
-        <select id="cardKind" class="field" aria-label="Tipo"><option value="">Todas as edições</option>${[['west', 'Ocidentais'], ['ja', 'Japonesas'], ['custom', 'Cadastradas à mão']].map(([k, l]) => `<option value="${k}"${filter.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <select id="cardKind" class="field" aria-label="Tipo"><option value="">Todas as edições</option>${[['west', 'Ocidentais'], ['ja', 'Japonesas'], ['zh', 'Chinesas'], ['custom', 'Cadastradas à mão']].map(([k, l]) => `<option value="${k}"${filter.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
       </div>
       ${all.length ? `<div class="table-wrap"><table class="table" id="cardTable">${head()}${tableBody()}</table></div>`
         : '<div class="empty"><h2>Nenhuma carta ainda</h2><p class="muted">Escaneie uma carta, busque pelo nome ou arraste uma foto para esta janela.</p></div>'}`;
@@ -120,7 +120,7 @@ window.Desk = (() => {
     const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`, num = v => v.toFixed(2).replace('.', ',');
     const brl = v => num(store.fx ? v * store.fx.BRL : v);
     const lines = [['Carta', 'Set', 'Número', 'Raridade', 'Edição', 'Quantidade', 'Graduadas', 'Valor unitário (R$)', 'Total (R$)'].map(cell).join(';'),
-      ...rows().map(c => [c.name, c.setName, c.localId, c.rarity, { west: 'Ocidental', ja: 'Japonesa', custom: 'Cadastrada' }[kindOf(c)], qtyOf(c), (c.graded || []).map(g => gradeLabel(g) + (g.cert ? ` (${g.cert})` : '')).join(', '), brl(unit(c)), brl(valueOf(c))].map(cell).join(';'))];
+      ...rows().map(c => [c.name, c.setName, c.localId, c.rarity, { west: 'Ocidental', ja: 'Japonesa', zh: 'Chinesa', custom: 'Cadastrada' }[kindOf(c)], qtyOf(c), (c.graded || []).map(g => gradeLabel(g) + (g.cert ? ` (${g.cert})` : '')).join(', '), brl(unit(c)), brl(valueOf(c))].map(cell).join(';'))];
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     a.download = `fichario-colecao-${new Date().toISOString().slice(0, 10)}.csv`;
