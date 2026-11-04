@@ -27,8 +27,8 @@ const numKey = n => String(n || '').toUpperCase().replace(/^0+(?=\d)/, '');
   const name = Object.fromEntries(en.map(s => [s.id, s.name]));
   const ptSets = (await getJSON('https://api.pokemontcg.io/v2/sets?pageSize=250')).data;
   console.log('sets na Pokémon TCG API', ptSets.length);
-  const match = sid => ptSets.find(p => p.id === altId(sid)) || ptSets.find(p => norm(p.name) === norm(name[sid]))
-    || ptSets.map(p => [p, jaccard(p.name, name[sid])]).filter(x => x[1] >= .6).sort((a, b) => b[1] - a[1])[0]?.[0];
+  // Só código ou nome exatos: o cruzamento por semelhança trocava sets parecidos (anos do McDonald's, kits, energias).
+  const match = sid => ptSets.find(p => p.id === altId(sid)) || ptSets.find(p => norm(p.name) === norm(name[sid]));
 
   // Logos dos sets que ainda não têm.
   let logoAdds = 0;

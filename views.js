@@ -83,7 +83,7 @@ function railCard(c, label) {
 }
 // Sem logo oficial, vale o símbolo do set; sem símbolo, o código impresso nas cartas ou as iniciais.
 const setCode = s => isAsian(s.id) ? rawOf(s.id) : s.name.split(/\s+/).filter(w => /^[\p{L}\d]/u.test(w) && w.length > 2).map(w => w[0]).join('').slice(0, 4).toUpperCase();
-const setArts = s => [...new Set([s.logo && s.logo + '.webp', s.logoAlt && s.logoAlt + '.webp', s.logoUrl].filter(Boolean))];
+const setArts = s => [...new Set([!store.namesEn && s.logoPt, s.logo && s.logo + '.webp', s.logoAlt && s.logoAlt + '.webp', s.logoUrl].filter(Boolean))];
 const setArt = s => setArts(s)[0] || '';
 const artFallback = s => esc(setArts(s).slice(1).join('|'));
 function setTile(s, have) {

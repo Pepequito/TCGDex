@@ -52,10 +52,12 @@ const isPocket = id => /^(A|B)\d+[a-z]?$|^P-/.test(id);
 const getSets = () => once('sets', async () => {
   const asianLists = Object.entries(ASIAN).map(([pre, L]) => getJSON(`${API}/${L.api}/sets`).then(list => list.map(s => ({ ...s, pre }))).catch(() => []));
   const [en, pt, extra, ...asian] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({})), ...asianLists]);
+  // Logos oficiais em português do site da Pokémon Brasil (tools/br-logos.js) têm prioridade.
+  const ptLogos = await getJSON('data/set-logos-pt.json').catch(() => ({}));
   const ptById = new Map(pt.map(s => [s.id, s]));
   return en.filter(s => !isPocket(s.id)).map(s => ({
     id: s.id, nameEn: s.name, name: preferName(ptById.get(s.id)?.name, s.name),
-    official: s.cardCount.official, total: s.cardCount.total, logo: ptById.get(s.id)?.logo || s.logo, logoAlt: s.logo, logoUrl: extra[s.id],
+    official: s.cardCount.official, total: s.cardCount.total, logoPt: ptLogos[s.id], logo: ptById.get(s.id)?.logo || s.logo, logoAlt: s.logo, logoUrl: extra[s.id],
     symbol: s.symbol || ptById.get(s.id)?.symbol,
     serie: /assets\.tcgdex\.net\/(?:en|pt|univ)\/([^/]+)\//.exec(s.logo || s.symbol || '')?.[1] || /^(me|swsh|sv|sm|xy|bw|hgss|dp|pl|ex|neo|base|gym|ecard)/.exec(s.id)?.[1] || '',
   })).reverse().concat(...asian.map(list => list.filter(s => !isPocket(s.id)).map(s => ({
