@@ -195,7 +195,8 @@ function setQty(card, variant, delta) {
   window.Social?.publishSoon();
 }
 async function refreshPrices(onStep) {
-  const cards = list();
+  // Cartas cadastradas à mão não têm preço automático.
+  const cards = list().filter(c => c.setId !== 'custom');
   let done = 0, failed = 0;
   const queue = [...cards];
   await Promise.all(Array.from({ length: 4 }, async () => {
@@ -206,8 +207,26 @@ async function refreshPrices(onStep) {
       onStep?.(++done, cards.length);
     }
   }));
-  store.pricedAt = Date.now(); save();
+  // Com metade ou mais falhando (sem internet, servidor fora), não conta como atualizado: tenta de novo depois.
+  if (failed < cards.length / 2) store.pricedAt = Date.now();
+  save();
   return failed;
+}
+// Uma vez por dia os preços são renovados sozinhos, em segundo plano: ao abrir o app,
+// ao voltar para ele, ou a cada hora se ele ficar aberto de um dia para o outro.
+const PRICE_EVERY = 20 * 36e5;
+let autoPricing = false;
+async function autoRefreshPrices() {
+  if (autoPricing || document.hidden || !navigator.onLine) return;
+  if (store.pricedAt && Date.now() - store.pricedAt < PRICE_EVERY) return;
+  if (!list().some(c => c.setId !== 'custom')) return;
+  autoPricing = true;
+  try {
+    await refreshPrices();
+    // Atualiza só telas de leitura, para não atrapalhar quem está digitando ou com uma carta aberta.
+    const typing = document.activeElement?.matches?.('input, textarea, select');
+    if (!typing && sheet.hidden && scanner.hidden && ['home', 'cards', 'profile', 'settings'].includes(route.tab)) render();
+  } finally { autoPricing = false; }
 }
 
 /* ---------- Painel da carta ---------- */

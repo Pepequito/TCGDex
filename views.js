@@ -373,7 +373,7 @@ async function squarePhoto(file) {
 
 /* ---------- Ajustes ---------- */
 function renderSettings() {
-  const when = store.pricedAt ? new Date(store.pricedAt).toLocaleDateString('pt-BR') : 'nunca';
+  const when = store.pricedAt ? new Date(store.pricedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'ainda não feita';
   view.innerHTML = `<button class="back" type="button" data-tab="profile">‹ Perfil</button><h1>Ajustes</h1>
     <div class="panel section" id="account"></div>
     <div class="panel"><h2>Moeda</h2>
@@ -381,7 +381,7 @@ function renderSettings() {
       <p class="muted small">Os preços vêm da TCGplayer (EUA) e da Cardmarket (Europa) e são convertidos pela cotação do dia. O mercado brasileiro pode praticar valores diferentes.${store.fx ? ` US$ 1 = R$ ${store.fx.BRL.toFixed(2).replace('.', ',')}.` : ''}</p></div>
     <div class="panel"><h2>Preços</h2>
       <button id="refreshPrices" class="btn alt" type="button">Atualizar preços da coleção</button>
-      <p class="muted small">Última atualização: ${when}.</p></div>
+      <p class="muted small">Os preços se atualizam sozinhos uma vez por dia. Última atualização: ${when}.</p></div>
     <div class="panel"><h2>Backup</h2>
       <button id="exportBtn" class="btn alt" type="button">Exportar coleção</button>
       <button id="importBtn" class="btn alt" type="button">Importar backup</button>
@@ -532,5 +532,8 @@ document.addEventListener('submit', e => {
 
 render();
 refreshFx();
+setTimeout(autoRefreshPrices, 4000);
+setInterval(autoRefreshPrices, 36e5);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefreshPrices(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 setTimeout(() => { const s = $('#splash'); s?.classList.add('out'); setTimeout(() => s?.remove(), 400); }, 450);
