@@ -156,11 +156,17 @@ function money(usd) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: cur });
 }
 const list = () => Object.values(store.cards);
-const qtyOf = c => Object.values(c.qty).reduce((a, b) => a + b, 0);
+// Cópias comuns ficam em qty (por variante); cópias graduadas, uma a uma, em graded.
+const rawQty = c => Object.values(c.qty || {}).reduce((a, b) => a + b, 0);
+const qtyOf = c => rawQty(c) + (c.graded?.length || 0);
 // O valor digitado está em reais e vale para todas as cópias da carta, no lugar do preço automático.
 const customUsd = brl => brl / (store.fx?.BRL || 5.4);
-const valueOf = c => c.custom != null ? qtyOf(c) * customUsd(c.custom)
-  : Object.entries(c.qty).reduce((a, [v, n]) => a + n * (toUsd(c.prices?.[v]) || 0), 0);
+// Graduada sem valor informado conta pelo preço da carta comum da mesma variante.
+const gradedUsd = (c, g) => g.value != null ? customUsd(g.value) : toUsd(c.prices?.[g.variant]) || 0;
+const valueOf = c => (c.custom != null ? rawQty(c) * customUsd(c.custom)
+  : Object.entries(c.qty || {}).reduce((a, [v, n]) => a + n * (toUsd(c.prices?.[v]) || 0), 0))
+  + (c.graded || []).reduce((a, g) => a + gradedUsd(c, g), 0);
+const gradeLabel = g => `${g.company} ${g.grade}`;
 function setCustom(id, brl) {
   const c = store.cards[id];
   if (!c) return;
@@ -176,6 +182,33 @@ const parseBrl = t => {
 const brlText = v => v == null ? '' : v.toFixed(2).replace('.', ',');
 const ligaUrl = c => `https://www.ligapokemon.com.br/?view=cards/search&card=${encodeURIComponent(c.nameEn || c.name)}`;
 
+function ensureCard(card) {
+  return store.cards[card.id] ??= {
+    id: card.id, localId: card.localId, name: card.name, image: card.image, imageEn: card.imageEn,
+    rarity: card.rarity, setId: card.setId, setName: card.setName, prices: card.prices, qty: {}, addedAt: Date.now(),
+  };
+}
+function touched(id) {
+  const c = store.cards[id];
+  if (c) { c.updatedAt = Date.now(); if (!rawQty(c) && !c.graded?.length) delete store.cards[id]; }
+  save();
+  window.Sync?.changed(id);
+  window.Social?.publishSoon();
+}
+// fromRaw: a pessoa mandou avaliar uma cópia que já estava na coleção, então ela sai das comuns.
+function addGraded(card, g, fromRaw) {
+  const c = ensureCard(card);
+  c.prices = card.prices || c.prices;
+  if (fromRaw && c.qty[g.variant] > 0) { c.qty[g.variant]--; if (!c.qty[g.variant]) delete c.qty[g.variant]; }
+  (c.graded ??= []).push({ gid: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...g });
+  touched(card.id);
+}
+function removeGraded(id, gid) {
+  const c = store.cards[id]; if (!c?.graded) return;
+  c.graded = c.graded.filter(g => g.gid !== gid);
+  if (!c.graded.length) delete c.graded;
+  touched(id);
+}
 function setQty(card, variant, delta) {
   let c = store.cards[card.id];
   if (!c) {
@@ -188,11 +221,7 @@ function setQty(card, variant, delta) {
   c.prices = card.prices || c.prices;
   c.qty[variant] = Math.max(0, (c.qty[variant] || 0) + delta);
   if (!c.qty[variant]) delete c.qty[variant];
-  c.updatedAt = Date.now();
-  if (!Object.keys(c.qty).length) delete store.cards[card.id];
-  save();
-  window.Sync?.changed(card.id);
-  window.Social?.publishSoon();
+  touched(card.id);
 }
 async function refreshPrices(onStep) {
   // Cartas cadastradas à mão não têm preço automático.
@@ -611,7 +640,7 @@ function showMatch({ cards }, resume = true) {
     const alts = others.length ? `<div class="section"><span class="muted small">Não é essa carta? Escolha outra:</span>
       <div class="alts">${others.map((c, k) => `<button type="button" data-alt="${same + k}" aria-label="${esc(c.name)}${isJa(c.id) ? ', japonesa' : ''}">${imgTag(c)}${isJa(c.id) ? '<span class="lang">JP</span>' : ''}</button>`).join('')}</div></div>` : '';
     const variant = (detail.variants.length ? VARIANTS[detail.variants[0]].label : 'Normal').toLowerCase();
-    sheet.innerHTML = `${cardHead(picked ? detail : { ...detail, setName: "Coleção a confirmar", localId: "?" })}${choose}<div id="variants">${variantRows(detail)}</div>${alts}${cardExtras(detail)}
+    sheet.innerHTML = `${cardHead(picked ? detail : { ...detail, setName: "Coleção a confirmar", localId: "?" })}${choose}<div id="variants">${variantRows(detail)}</div>${picked ? gradedBlock(detail) : ''}${alts}${cardExtras(detail)}
       <div class="sheet-actions">
         ${picked ? `<button class="btn" type="button" data-add>Adicionar ${esc(variant)} · ${esc(detail.setName)}</button>`
           : '<button class="btn" type="button" disabled>Escolha a coleção acima</button>'}

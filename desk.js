@@ -90,7 +90,7 @@ window.Desk = (() => {
   function tableBody() {
     const r = rows(), copies = r.reduce((a, c) => a + qtyOf(c), 0), total = r.reduce((a, c) => a + valueOf(c), 0);
     const body = r.map(c => `<tr data-card="${esc(c.id)}" tabindex="0">
-      <td><span class="cell-card"><span class="thumb">${imgTag(c, 'low', '')}</span><b>${esc(c.name)}</b>${store.profile.showcase.includes(c.id) ? '<span class="star-mark" title="Na vitrine">★</span>' : ''}</span></td>
+      <td><span class="cell-card"><span class="thumb">${imgTag(c, 'low', '')}</span><b>${esc(c.name)}</b>${(c.graded || []).map(g => ` <span class="pill slab-pill">${esc(gradeLabel(g))}</span>`).join('')}${store.profile.showcase.includes(c.id) ? '<span class="star-mark" title="Na vitrine">★</span>' : ''}</span></td>
       <td>${esc(c.setName)}${isJa(c.id) ? ' <span class="pill">JP</span>' : ''}</td><td class="num">${esc(c.localId)}</td><td class="muted col-rarity">${esc(c.rarity || '—')}</td>
       <td class="num right">${qtyOf(c)}</td><td class="num right">${money(unit(c))}${c.custom != null ? ' <span class="pill">seu</span>' : ''}</td><td class="num right"><b>${money(valueOf(c))}</b></td></tr>`).join('');
     return `<tbody>${body || '<tr><td colspan="7" class="muted empty-row">Nenhuma carta com esses filtros.</td></tr>'}</tbody>
@@ -119,8 +119,8 @@ window.Desk = (() => {
   function csv() {
     const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`, num = v => v.toFixed(2).replace('.', ',');
     const brl = v => num(store.fx ? v * store.fx.BRL : v);
-    const lines = [['Carta', 'Set', 'Número', 'Raridade', 'Edição', 'Quantidade', 'Valor unitário (R$)', 'Total (R$)'].map(cell).join(';'),
-      ...rows().map(c => [c.name, c.setName, c.localId, c.rarity, { west: 'Ocidental', ja: 'Japonesa', custom: 'Cadastrada' }[kindOf(c)], qtyOf(c), brl(unit(c)), brl(valueOf(c))].map(cell).join(';'))];
+    const lines = [['Carta', 'Set', 'Número', 'Raridade', 'Edição', 'Quantidade', 'Graduadas', 'Valor unitário (R$)', 'Total (R$)'].map(cell).join(';'),
+      ...rows().map(c => [c.name, c.setName, c.localId, c.rarity, { west: 'Ocidental', ja: 'Japonesa', custom: 'Cadastrada' }[kindOf(c)], qtyOf(c), (c.graded || []).map(g => gradeLabel(g) + (g.cert ? ` (${g.cert})` : '')).join(', '), brl(unit(c)), brl(valueOf(c))].map(cell).join(';'))];
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     a.download = `fichario-colecao-${new Date().toISOString().slice(0, 10)}.csv`;

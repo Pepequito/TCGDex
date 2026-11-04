@@ -191,9 +191,9 @@ async function renderSet() {
     ${shown.length ? `<div class="binder">${shown.map(pocket).join('')}</div>` : '<p class="muted">Nada para mostrar neste filtro.</p>'}`;
 }
 function pocket(c) {
-  const own = store.cards[c.id], star = store.profile.showcase.includes(c.id);
+  const own = store.cards[c.id], star = store.profile.showcase.includes(c.id), slab = own?.graded?.[0];
   return `<button type="button" class="pocket${own ? '' : ' missing'}" data-card="${esc(c.id)}" aria-label="${esc(c.name)} ${esc(c.localId)}${own ? '' : ', faltando'}">
-    ${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${own && qtyOf(own) > 1 ? `<span class="qty">×${qtyOf(own)}</span>` : ''}${star ? '<span class="star" aria-hidden="true">★</span>' : ''}</button>`;
+    ${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${own && qtyOf(own) > 1 ? `<span class="qty">×${qtyOf(own)}</span>` : ''}${star ? '<span class="star" aria-hidden="true">★</span>' : ''}${slab ? `<span class="slab-tag">${esc(gradeLabel(slab))}</span>` : ''}</button>`;
 }
 
 /* ---------- Busca ---------- */
@@ -429,6 +429,45 @@ async function saveManual() {
   toast(`${name} adicionada`);
   closeSheet();
 }
+/* ---------- Cartas graduadas ---------- */
+const GRADERS = ['PSA', 'CGC', 'BGS', 'TAG', 'SGC', 'ACE', 'Outra'];
+const GRADES = ['10', '9.5', '9', '8.5', '8', '7.5', '7', '6.5', '6', '5', '4', '3', '2', '1', 'Autêntica'];
+function gradedBlock(card) {
+  const own = store.cards[card.id], list = own?.graded || [], vs = card.variants?.length ? card.variants : ['normal'];
+  const rows = list.map(g => `<div class="graded-row"><span class="slab">${esc(gradeLabel(g))}</span>
+    <span class="grow"><b>${esc(VARIANTS[g.variant]?.label || '')}</b><span class="muted small">${money(gradedUsd(own, g))}${g.value == null ? ' (preço da carta comum)' : ''}${g.cert ? ` · cert. ${esc(g.cert)}` : ''}</span></span>
+    <button class="icon-btn" type="button" data-ungrade="${esc(g.gid)}" aria-label="Remover ${esc(gradeLabel(g))}">✕</button></div>`).join('');
+  const raw = own ? rawQty(own) : 0;
+  return `<div id="graded" class="section"><div class="section-head"><h2>Graduadas</h2>${list.length ? `<span class="muted small">${list.length}</span>` : ''}</div>${rows}
+    <details><summary>+ Adicionar cópia graduada</summary><form id="gradeForm" class="grade-form">
+      <div class="two"><label class="small muted">Empresa<select id="gCompany" class="field">${GRADERS.map(x => `<option>${x}</option>`).join('')}</select></label>
+        <label class="small muted">Nota<select id="gGrade" class="field">${GRADES.map(x => `<option>${x}</option>`).join('')}</select></label></div>
+      <div class="two"><label class="small muted">Variante<select id="gVariant" class="field">${vs.map(v => `<option value="${v}">${VARIANTS[v].label}</option>`).join('')}</select></label>
+        <label class="small muted">Valor em R$<input id="gValue" class="field" inputmode="decimal" placeholder="Opcional" autocomplete="off"></label></div>
+      <label class="small muted">Número do certificado<input id="gCert" class="field" placeholder="Opcional" autocomplete="off"></label>
+      ${raw ? '<label class="check"><input id="gFromRaw" type="checkbox"> É uma cópia que já está na coleção (sai das comuns)</label>' : ''}
+      <button class="btn" type="submit">Adicionar graduada</button></form></details></div>`;
+}
+function refreshCardPanel() {
+  if (!sheetCard) return;
+  $('#variants') && ($('#variants').innerHTML = variantRows(sheetCard));
+  $('#graded') && ($('#graded').outerHTML = gradedBlock(sheetCard));
+  $('#extras') && ($('#extras').outerHTML = cardExtras(sheetCard));
+}
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'gradeForm' || !sheetCard) return;
+  e.preventDefault();
+  const g = { company: $('#gCompany').value, grade: $('#gGrade').value, variant: $('#gVariant').value, value: parseBrl($('#gValue').value), cert: $('#gCert').value.trim() };
+  if (!g.cert) delete g.cert;
+  addGraded(sheetCard, g, !!$('#gFromRaw')?.checked);
+  toast(`${sheetCard.name} ${gradeLabel(g)} adicionada`);
+  refreshCardPanel();
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-ungrade]'); if (!b || !sheetCard) return;
+  removeGraded(sheetCard.id, b.dataset.ungrade);
+  refreshCardPanel();
+});
 function variantRows(card) {
   const own = store.cards[card.id]?.qty || {};
   const vs = card.variants.length ? card.variants : ['normal'];
@@ -451,7 +490,7 @@ async function showCard(id) {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${cardExtras(sheetCard)}`;
+    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${gradedBlock(sheetCard)}${cardExtras(sheetCard)}`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
 
@@ -494,7 +533,7 @@ document.addEventListener('click', e => {
     $('#extras').outerHTML = cardExtras(sheetCard);
   }
   else if (d.photoOff !== undefined) { pendingPhoto = null; b.remove(); $('#pPreview').innerHTML = '<span class="avatar initials">?</span>'; }
-  else if (d.step !== undefined) setTimeout(() => { const x = $('#extras'); if (x && sheetCard) x.outerHTML = cardExtras(sheetCard); });
+  else if (d.step !== undefined) setTimeout(() => { const x = $('#extras'); if (x && sheetCard) x.outerHTML = cardExtras(sheetCard); const g = $('#graded'); if (g && sheetCard) g.outerHTML = gradedBlock(sheetCard); });
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) closeSheet(); });
 let exploreTimer;
