@@ -36,5 +36,33 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isMe(other);
     }
+    // Atividade (cartas adicionadas): o dono escreve; amigos leem se o perfil não for privado.
+    match /users/{uid}/activity/{aid} {
+      allow read: if isMe(uid) || (request.auth != null && hasProfile(uid) && profile(uid).privacy != 'private');
+      allow write: if isMe(uid);
+
+      // Curtida: uma por pessoa, com o próprio uid como id.
+      match /likes/{liker} {
+        allow read: if request.auth != null;
+        allow create: if isMe(liker) && request.resource.data.keys().hasOnly(['username', 'at']);
+        allow delete: if isMe(liker);
+      }
+      // Comentário: quem escreveu apaga; o dono do post também.
+      match /comments/{cid} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 300
+          && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'at']);
+        allow delete: if request.auth != null && (resource.data.uid == request.auth.uid || isMe(uid));
+      }
+    }
+
+    // Relatos de problema: qualquer pessoa envia (até convidado); só o desenvolvedor lê e apaga.
+    match /reports/{rid} {
+      allow create: if request.resource.data.text is string && request.resource.data.text.size() <= 1000
+        && request.resource.data.photo is string && request.resource.data.photo.size() <= 400000
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80;
+      allow read, delete: if request.auth != null && request.auth.token.email == 'pedrohblour@gmail.com' && request.auth.token.email_verified == true;
+    }
   }
 }

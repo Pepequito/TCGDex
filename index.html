@@ -21,16 +21,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611041328">
+<link rel="stylesheet" href="styles.css?v=202611042146">
 <style>
 /* Estilo mínimo da abertura, embutido: ela fica certa mesmo se styles.css ainda estiver carregando. */
 #splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 14px; background: #080c1b; }
 #splash .logo { width: min(84vw, 460px); height: auto; }
+#splash .brand-lock { display: grid; justify-items: center; gap: 4px; }
+#splash .beta { font: 700 12px/1 system-ui, sans-serif; letter-spacing: .28em; color: #3fd8ff; padding: 5px 9px 5px 12px; border: 1px solid rgb(63 216 255 / .5); border-radius: 999px; }
 #splash .app-icon { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 0 0 2px rgb(63 216 255 / .5), 0 0 30px rgb(63 216 255 / .35); }
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><img class="app-icon" src="icons/icon-192.png" alt=""><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"></div>
+<div id="splash" aria-hidden="true"><img class="app-icon" src="icons/icon-192.png" alt=""><span class="brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></span></div>
 <script>setTimeout(function () { var s = document.getElementById('splash'); if (s) s.remove(); }, 3000);</script>
 <header id="deskbar">
   <form id="deskSearch" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
@@ -41,12 +43,13 @@
 <main id="view"></main>
 
 <nav id="tabs" aria-label="Navegação principal">
-  <div id="brand" class="desk-only"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"></div>
+  <div id="brand" class="desk-only brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></div>
   <button data-tab="home" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3zM5 18a3 3 0 0 1 3-3h11"/></svg><span>Coleção</span></button>
   <button data-tab="cards" type="button" class="desk-only"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Minhas cartas</span></button>
   <button data-tab="sets" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg><span>Sets</span></button>
   <button id="scanBtn" type="button" aria-label="Escanear carta"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M4 12h16"/></svg><span class="scan-label">Escanear carta</span></button>
-  <button data-tab="search" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span>Explorar</span></button>
+  <button data-tab="search" type="button" class="desk-only"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span>Explorar</span></button>
+  <button data-tab="social" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.500 3.300-5.500 6.500-5.500s5.700 2 6.500 5.500"/><circle cx="17" cy="9" r="2.800"/><path d="M16 14.600c2.800-.3 4.800 1.400 5.500 4.400"/></svg><span>Social</span></button>
   <button data-tab="profile" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.500-4 4.500-6 8-6s6.500 2 8 6"/></svg><span>Perfil</span></button>
   <div id="sideUser" class="desk-only"></div>
 </nav>
@@ -61,6 +64,7 @@
   <p id="scanStatus" role="status">Abrindo a câmera…</p>
   <div class="scan-bottom">
     <label class="ghost" for="photoInput">Usar uma foto</label>
+    <button class="ghost" type="button" data-report="scan">Não reconhece? Avise</button>
     <input id="photoInput" type="file" accept="image/*" hidden>
   </div>
 </section>
@@ -71,11 +75,12 @@
 <input id="importInput" type="file" accept="application/json,.json" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
-<script src="firebase-config.js?v=202611041328" defer></script>
-<script src="app.js?v=202611041328" defer></script>
-<script src="views.js?v=202611041328" defer></script>
-<script src="desk.js?v=202611041328" defer></script>
-<script src="sync.js?v=202611041328" defer></script>
-<script src="social.js?v=202611041328" defer></script>
+<script src="firebase-config.js?v=202611042146" defer></script>
+<script src="app.js?v=202611042146" defer></script>
+<script src="views.js?v=202611042146" defer></script>
+<script src="desk.js?v=202611042146" defer></script>
+<script src="sync.js?v=202611042146" defer></script>
+<script src="help.js?v=202611042146" defer></script>
+<script src="social.js?v=202611042146" defer></script>
 </body>
 </html>

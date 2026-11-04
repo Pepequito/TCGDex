@@ -55,6 +55,7 @@ window.Sync = (() => {
       unsub = cardsRef().onSnapshot({ includeMetadataChanges: true }, onSnapshot, () => { status = 'Erro ao sincronizar. Confira as regras do Firestore.'; paint(); });
     }
     window.Social?.onUser(user);
+    if (user) { store.gate = 'account'; save(); hideGate(); }
     paint(); render();
   }
   function reconcile(snap) {
@@ -111,8 +112,40 @@ window.Sync = (() => {
   }
 
   function show(msg) { notice = msg; paint(); }
+  /* ---------- Tela de entrada ---------- */
+  // Na primeira abertura a pessoa escolhe: entrar, criar conta ou seguir como convidado (dados só no aparelho).
+  store.gate ??= store.synced?.length ? 'account' : null;
+  function showGate() {
+    if (!config || user || document.getElementById('gate')) return;
+    const g = document.createElement('section');
+    g.id = 'gate'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-modal', 'true'); g.setAttribute('aria-label', 'Entrar no Boosterz');
+    const again = store.gate === 'guest';
+    g.innerHTML = `<div class="gate-card">${again ? '<button class="sheet-x" type="button" data-guest aria-label="Fechar">✕</button>' : ''}
+      <img class="app-icon" src="icons/icon-192.png" alt=""><div class="brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></div>
+      <p class="gate-lead">Escaneie, organize e acompanhe o valor da sua coleção de Pokémon TCG.</p>
+      <div class="account"></div>
+      <div class="gate-guest"><button class="btn ghost-btn" type="button" data-guest>${again ? 'Continuar sem conta' : 'Continuar como convidado'}</button>
+        <p class="small warn">⚠︎ Como convidado, a coleção fica salva só na memória deste aparelho. Se você limpar os dados do navegador, trocar de celular ou remover o app, pode perder tudo. Dá para criar a conta depois, em Ajustes, sem perder as cartas.</p></div></div>`;
+    document.body.append(g);
+    document.body.classList.add('gated');
+    paint();
+  }
+  function hideGate() {
+    document.getElementById('gate')?.remove();
+    document.body.classList.remove('gated');
+    window.Sync && paint();
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.guest !== undefined) {
+      if (store.gate !== 'guest') toast('Modo convidado: lembre de exportar um backup de vez em quando');
+      store.gate = 'guest'; save(); hideGate();
+    } else if (b.dataset.gate !== undefined) showGate();
+  });
+
   function paint() {
-    const box = document.getElementById('account');
+    const gate = document.querySelector('#gate .account');
+    const box = gate || document.getElementById('account');
     if (!box) return;
     if (!config) { box.innerHTML = '<h2>Conta</h2><p class="muted small">O login ainda não foi configurado. Use o backup abaixo.</p>'; return; }
     const note = notice ? `<p class="small" role="status">${esc(notice)}</p>` : '';
@@ -123,8 +156,9 @@ window.Sync = (() => {
       return;
     }
     const email = document.getElementById('authEmail')?.value || '';
-    box.innerHTML = `<h2>Conta</h2><p class="muted small">Entre para salvar a coleção na nuvem e usar em outros aparelhos.</p>${note}
-      <button class="btn" type="button" data-sync="google">Entrar com Google</button>
+    box.innerHTML = `${gate ? '<h2>Entre ou crie sua conta</h2><p class="muted small">Sua coleção fica salva na nuvem, aparece em todos os seus aparelhos e você pode seguir seus amigos.</p>'
+      : '<h2>Conta</h2><p class="muted small">Entre para salvar a coleção na nuvem e usar em outros aparelhos.</p>'}${note}
+      <button class="btn google" type="button" data-sync="google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.2c0-.7-.1-1.400-.2-2H12v3.800h6c-.3 1.400-1 2.500-2.200 3.300v2.700h3.500c2.100-1.900 3.300-4.700 3.300-7.800z"/><path fill="#34A853" d="M12 23c3 0 5.500-1 7.300-2.700l-3.500-2.700c-1 .7-2.300 1.100-3.800 1.100-2.900 0-5.400-2-6.300-4.600H2.100v2.800C3.900 20.500 7.700 23 12 23z"/><path fill="#FBBC05" d="M5.700 14.100c-.2-.7-.4-1.400-.4-2.100s.1-1.400.4-2.100V7.100H2.100C1.400 8.600 1 10.200 1 12s.4 3.400 1.100 4.900z"/><path fill="#EA4335" d="M12 5.400c1.600 0 3.100.6 4.200 1.700l3.200-3.200C17.500 2.100 15 1 12 1 7.700 1 3.900 3.500 2.100 7.100l3.600 2.800C6.600 7.300 9.100 5.400 12 5.400z"/></svg>Entrar com Google</button>
       <form id="authForm" class="section">
         <input id="authEmail" class="field" type="email" autocomplete="email" placeholder="E-mail" value="${esc(email)}" required>
         <input id="authPass" class="field" type="password" autocomplete="current-password" placeholder="Senha" required>
@@ -150,7 +184,7 @@ window.Sync = (() => {
     const b = e.target.closest('[data-sync]'); if (!b || !auth) return;
     const kind = b.dataset.sync;
     if (kind === 'google') act(google);
-    else if (kind === 'out') act(async () => { store.synced = []; save(); await auth.signOut(); });
+    else if (kind === 'out') act(async () => { store.synced = []; store.gate = null; save(); await auth.signOut(); go({ tab: 'home', setId: null }); showGate(); });
     else if (kind === 'create') {
       const [mail, pass] = creds();
       act(() => auth.createUserWithEmailAndPassword(mail, pass));
@@ -167,7 +201,9 @@ window.Sync = (() => {
   });
 
   boot();
+  if (!store.gate) showGate();
   return {
+    showGate,
     paint,
     changed(id) { if (user && db) send([id]); },
     changedAll(ids) { if (user && db) send(ids); },
@@ -175,6 +211,6 @@ window.Sync = (() => {
     ctx: () => ({ db, user }),
     user: () => user && { name: user.displayName?.split(' ')[0] || '', photo: user.photoURL || '', email: user.email || '' },
     nudge: () => config && !user && list().length
-      ? '<button class="btn alt" type="button" data-tab="settings">Entre na conta para proteger sua coleção</button>' : '',
+      ? '<button class="btn alt" type="button" data-gate>Entre na conta para proteger sua coleção</button>' : '',
   };
 })();

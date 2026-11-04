@@ -1,9 +1,10 @@
 'use strict';
-// Parte social: nome de usuário, perfil público, seguir pessoas e ver a coleção de amigos.
-// Os dados públicos ficam em profiles/{uid}; a coleção de quem é público é lida direto de users/{uid}/cards.
+// Parte social: nome de usuário, perfil público, seguir pessoas, feed do que os amigos adicionam, curtidas e comentários.
+// Perfil público em profiles/{uid}; atividades em users/{uid}/activity/{id}, com likes/{uid} e comments/{id} dentro.
 window.Social = (() => {
   const NAME = /^[a-z0-9_]{3,20}$/;
-  const PRIVACY = [['public', 'Público: vitrine e coleção'], ['showcase', 'Só a vitrine'], ['private', 'Privado']];
+  const PRIVACY = [['public', 'Público: vitrine, coleção e atividade'], ['showcase', 'Só a vitrine e a atividade'], ['private', 'Privado']];
+  const GROUP_MS = 15 * 60e3, GROUP_MAX = 12;
   let me = null, mine = null, blocked = false, loaded = false, timer = null;
   const fb = () => window.Sync?.ctx?.() || {};
   const db = () => fb().db;
@@ -14,10 +15,20 @@ window.Social = (() => {
     return db();
   }
   const denied = e => e?.code === 'permission-denied';
+  const ago = t => {
+    const s = (Date.now() - t) / 1000;
+    if (s < 60) return 'agora';
+    if (s < 3600) return `há ${Math.floor(s / 60)} min`;
+    if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
+    if (s < 86400 * 7) return `há ${Math.floor(s / 86400)} d`;
+    return new Date(t).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  };
+  const initials = (n = '?') => `<span class="avatar initials">${esc(String(n).trim().charAt(0).toUpperCase() || '?')}</span>`;
+  const face = p => p?.photo ? `<img class="avatar" src="${esc(p.photo)}" alt="" referrerpolicy="no-referrer">` : initials(p?.name || p?.username);
 
   /* ---------- Meu perfil público ---------- */
   function onUser(u) {
-    me = u; mine = null; loaded = false; blocked = false;
+    me = u; mine = null; loaded = false; blocked = false; feed = null;
     if (u) load();
   }
   async function load() {
@@ -27,16 +38,18 @@ window.Social = (() => {
       if (mine) publishSoon();
     } catch (e) { blocked = denied(e); }
     loaded = true;
-    if (route.tab === 'profile') render();
+    if (['profile', 'settings', 'social'].includes(route.tab)) render();
   }
   function publicDoc() {
     const u = window.Sync?.user?.() || {};
+    const p = store.profile;
     return {
-      uid: me.uid, username: mine.username, name: trainerName(), bio: store.profile.bio || '',
-      photo: store.profile.photo || u.photo || '', privacy: mine.privacy || 'public', showValue: !!mine.showValue,
+      uid: me.uid, username: mine.username, name: trainerName(), bio: p.bio || '',
+      photo: p.photo || u.photo || '', privacy: mine.privacy || 'public', showValue: !!mine.showValue,
       value: mine.showValue ? Math.round(collectionValue() * 100) / 100 : null,
       cards: copiesCount(), unique: list().length,
-      showcase: showcaseCards().slice(0, 9).map(c => ({ id: c.id, name: c.name, image: c.image || '', setName: c.setName || '' })),
+      banner: p.banner || '', ring: p.ring || '', bannerImage: bannerImage() || '',
+      showcase: showcaseCards().slice(0, 9).map(c => ({ id: c.id, name: c.name, image: c.image?.startsWith('data:') ? '' : c.image || '', setName: c.setName || '' })),
       updatedAt: Date.now(),
     };
   }
@@ -73,42 +86,175 @@ window.Social = (() => {
     try { await navigator.clipboard.writeText(url); toast('Link do perfil copiado'); }
     catch { toast(url); }
   }
+  const handle = () => mine?.username || '';
 
-  /* ---------- Blocos da aba Perfil ---------- */
-  function ownBlock() {
-    if (!window.FICHARIO_FIREBASE) return '';
-    if (!me) return `<div class="panel social"><h2>Perfil público e amigos</h2><p class="muted small">Entre na sua conta para escolher um nome de usuário, compartilhar seu perfil e seguir amigos.</p>
-      <button class="btn alt" type="button" data-tab="settings">Entrar na conta</button></div>`;
-    if (blocked) return '<div class="panel social"><h2>Amigos</h2><p class="muted small">Os recursos de amigos ainda não foram ativados no Firebase. Assim que as regras novas forem publicadas, eles aparecem aqui.</p></div>';
-    if (!loaded) return '<div class="panel social"><p class="muted small">Carregando seu perfil público…</p></div>';
-    if (!mine?.username) return `<div class="panel social"><h2>Escolha seu nome de usuário</h2>
+  /* ---------- Bloco de Ajustes: nome, link e privacidade ---------- */
+  function claimForm() {
+    return `<h2>Escolha seu nome de usuário</h2>
       <p class="muted small">É por ele que seus amigos encontram você, e ele forma o link do seu perfil.</p>
       <form id="claimForm" class="handle-form"><span class="at">@</span><input id="claimName" class="field" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="seu_nome" aria-label="Nome de usuário"></form>
-      <p class="small warn" id="claimMsg" hidden></p><button class="btn" type="submit" form="claimForm">Salvar nome</button></div>`;
-    return `<div class="panel social"><div class="handle-row"><b>@${esc(mine.username)}</b><button class="btn alt auto" type="button" data-share-profile>Compartilhar perfil</button></div>
+      <p class="small warn" id="claimMsg" hidden></p><button class="btn" type="submit" form="claimForm">Salvar nome</button>`;
+  }
+  function ownBlock() {
+    if (!window.FICHARIO_FIREBASE) return '';
+    const head = '<h2>Perfil público</h2>';
+    if (!me) return `<div class="panel social">${head}<p class="muted small">Entre na sua conta para escolher um nome de usuário, compartilhar seu perfil e controlar quem vê sua coleção.</p></div>`;
+    if (blocked) return `<div class="panel social">${head}<p class="muted small">Os recursos sociais ainda não foram ativados no Firebase.</p></div>`;
+    if (!loaded) return `<div class="panel social">${head}<p class="muted small">Carregando…</p></div>`;
+    if (!mine?.username) return `<div class="panel social">${claimForm()}</div>`;
+    return `<div class="panel social">${head}<div class="handle-row"><b>@${esc(mine.username)}</b><button class="btn alt auto" type="button" data-share-profile>Compartilhar</button></div>
       <label class="small muted" for="privacy">Quem vê seu perfil</label>
       <select id="privacy" class="field">${PRIVACY.map(([k, l]) => `<option value="${k}"${(mine.privacy || 'public') === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
-      <label class="check"><input id="showValue" type="checkbox"${mine.showValue ? ' checked' : ''}> Mostrar o valor da coleção no perfil</label></div>`;
+      <label class="check"><input id="showValue" type="checkbox"${mine.showValue ? ' checked' : ''}> Mostrar o valor da coleção no perfil</label>
+      <p class="muted small">No modo privado, ninguém vê seu perfil e suas novas cartas não aparecem no feed dos amigos.</p></div>`;
   }
-  async function fillFriends() {
-    const box = $('#friendsBox');
-    if (!box || !me || blocked || !mine?.username) return;
-    box.innerHTML = `<div class="section-head"><h2>Amigos</h2><span class="muted small" id="followCount"></span></div>
-      <input id="peopleQ" class="field" type="search" placeholder="Procurar pessoas por @usuário" aria-label="Procurar pessoas" autocomplete="off" autocapitalize="none">
-      <div id="peopleOut" class="people"></div><div id="followingOut" class="people"><p class="muted small">Carregando…</p></div>`;
+
+  /* ---------- Atividade: cartas que acabei de adicionar ---------- */
+  // Adições próximas viram um único post ("adicionou 5 cartas"), para o feed não lotar.
+  const pending = new Map();
+  let flushTimer = null;
+  function added(c) {
+    if (!me || !mine?.username || mine.privacy === 'private' || c.setId === 'custom') return;
+    pending.set(c.id, { id: c.id, name: c.name, image: c.image?.startsWith('data:') ? '' : c.image || '', imageEn: c.imageEn?.startsWith('data:') ? '' : c.imageEn || '', setName: c.setName || '' });
+    clearTimeout(flushTimer); flushTimer = setTimeout(flush, 4000);
+  }
+  async function flush() {
+    if (!pending.size || !db() || !me) return;
+    const key = 'boosterz.act.' + me.uid;
+    let last = null;
+    try { last = JSON.parse(localStorage.getItem(key) || 'null'); } catch { /* sem último post */ }
+    const fresh = [...pending.values()]; pending.clear();
+    const col = db().collection('users').doc(me.uid).collection('activity');
+    try {
+      if (last && Date.now() - last.start < GROUP_MS && last.ids.length < GROUP_MAX) {
+        const ref = col.doc(last.id), snap = await ref.get();
+        if (snap.exists) {
+          const cards = [...snap.data().cards.filter(c => !fresh.some(f => f.id === c.id)), ...fresh].slice(-GROUP_MAX);
+          await ref.update({ cards, count: cards.length, at: Date.now() });
+          localStorage.setItem(key, JSON.stringify({ ...last, ids: cards.map(c => c.id) }));
+          return;
+        }
+      }
+      const ref = col.doc();
+      const cards = fresh.slice(-GROUP_MAX);
+      await ref.set({ uid: me.uid, username: mine.username, name: trainerName(), at: Date.now(), count: cards.length, cards });
+      localStorage.setItem(key, JSON.stringify({ id: ref.id, start: Date.now(), ids: cards.map(c => c.id) }));
+    } catch { /* sem regras novas ou sem conexão: o post fica de fora */ }
+  }
+
+  /* ---------- Aba Social ---------- */
+  let feed = null, people = new Map();
+  function renderSocial() {
+    const head = '<div class="page-head"><div><h1>Social</h1><span class="muted">O que seus amigos estão colecionando</span></div></div>';
+    if (!window.FICHARIO_FIREBASE) { view.innerHTML = `${head}<p class="muted">O login ainda não foi configurado.</p>`; return; }
+    if (!me) {
+      view.innerHTML = `${head}<div class="empty"><h2>Entre para ver seus amigos</h2><p class="muted">Com uma conta você escolhe um nome de usuário, segue amigos e vê, curte e comenta as cartas que eles adicionam.</p>
+        <button class="btn" type="button" data-gate>Entrar ou criar conta</button></div>`;
+      return;
+    }
+    if (blocked) { view.innerHTML = `${head}<p class="muted">Os recursos sociais ainda não foram ativados no Firebase.</p>`; return; }
+    if (!loaded) { view.innerHTML = `${head}<p class="muted">Carregando…</p>`; return; }
+    if (!mine?.username) { view.innerHTML = `${head}<div class="panel social">${claimForm()}</div>`; return; }
+    view.innerHTML = `${head}
+      <div class="social-grid"><div class="social-side">
+        <div class="panel"><div class="handle-row"><button type="button" class="person-main" data-friend="${esc(mine.username)}"><span class="ring-avatar" style="${ringStyle(store.profile.ring)}">${avatar()}</span><span><b>@${esc(mine.username)}</b><span class="muted small" id="followCount">…</span></span></button>
+          <button class="btn alt auto" type="button" data-share-profile>Convidar</button></div>
+          <input id="peopleQ" class="field" type="search" placeholder="Procurar pessoas por @usuário" aria-label="Procurar pessoas" autocomplete="off" autocapitalize="none">
+          <div id="peopleOut" class="people"></div></div>
+        <details class="panel" id="followingBox"><summary><b>Quem você segue</b></summary><div id="followingOut" class="people"><p class="muted small">Carregando…</p></div></details>
+      </div><div class="feed" id="feed"><p class="muted">Carregando o feed…</p></div></div>`;
+    loadFeed();
+  }
+  async function loadFeed() {
     try {
       const [following, followers] = await Promise.all([
         db().collection('follows').doc(me.uid).collection('following').get(),
         db().collection('followers').doc(me.uid).collection('list').get(),
       ]);
-      $('#followCount') && ($('#followCount').textContent = `${following.size} seguindo · ${followers.size} ${followers.size === 1 ? 'seguidor' : 'seguidores'}`);
-      const out = $('#followingOut'); if (!out) return;
-      out.innerHTML = following.size ? following.docs.map(d => personRow(d.data().username, d.id, true)).join('')
-        : '<p class="muted small">Você ainda não segue ninguém. Procure seus amigos pelo nome de usuário.</p>';
-    } catch (e) { blocked = denied(e); }
+      const fc = $('#followCount');
+      if (fc) fc.textContent = `${following.size} seguindo · ${followers.size} ${followers.size === 1 ? 'seguidor' : 'seguidores'}`;
+      const out = $('#followingOut');
+      if (out) out.innerHTML = following.size ? following.docs.map(d => personRow(d.data().username, d.id, true)).join('')
+        : '<p class="muted small">Você ainda não segue ninguém.</p>';
+      const uids = [me.uid, ...following.docs.map(d => d.id)].slice(0, 40);
+      const lists = await Promise.all(uids.map(async uid => {
+        try {
+          const [acts, prof] = await Promise.all([
+            db().collection('users').doc(uid).collection('activity').orderBy('at', 'desc').limit(8).get(),
+            uid === me.uid ? null : people.get(uid) || db().collection('profiles').doc(uid).get().then(d => d.data()),
+          ]);
+          if (prof) people.set(uid, prof);
+          return acts.docs.map(d => ({ ...d.data(), aid: d.id }));
+        } catch { return []; }
+      }));
+      feed = lists.flat().sort((a, b) => b.at - a.at).slice(0, 40);
+      await Promise.all(feed.map(async a => {
+        const ref = actRef(a);
+        try {
+          const [likes, comments] = await Promise.all([ref.collection('likes').get(), ref.collection('comments').get()]);
+          a.likes = likes.size; a.liked = likes.docs.some(d => d.id === me.uid); a.comments = comments.size;
+        } catch { a.likes = a.comments = 0; }
+      }));
+      drawFeed(following.size);
+    } catch (e) {
+      blocked = denied(e);
+      const box = $('#feed'); if (box) box.innerHTML = '<p class="muted">Não consegui carregar o feed. Verifique a conexão.</p>';
+    }
   }
+  const actRef = a => db().collection('users').doc(a.uid).collection('activity').doc(a.aid);
+  function drawFeed(followingCount) {
+    const box = $('#feed'); if (!box || route.tab !== 'social') return;
+    if (!feed.length) {
+      box.innerHTML = `<div class="empty"><h2>${followingCount ? 'Nada novo por aqui' : 'Seu feed está vazio'}</h2>
+        <p class="muted">${followingCount ? 'Quando seus amigos adicionarem cartas, elas aparecem aqui.' : 'Procure seus amigos pelo nome de usuário e siga para ver as cartas que eles adicionam.'}</p></div>`;
+      return;
+    }
+    box.innerHTML = feed.map(post).join('');
+  }
+  function post(a) {
+    const mineAct = a.uid === me.uid, p = mineAct ? { photo: store.profile.photo || window.Sync?.user?.()?.photo, name: trainerName(), ring: store.profile.ring } : people.get(a.uid) || a;
+    const cards = a.cards || [], key = `${a.uid}/${a.aid}`;
+    return `<article class="post" data-act="${esc(key)}">
+      <header><button type="button" class="person-main" data-friend="${esc(a.username)}"><span class="ring-avatar" style="${ringStyle(p.ring)}">${face(p)}</span>
+        <span><b>${esc(p.name || a.name || a.username)}</b><span class="muted small">@${esc(a.username)} · ${ago(a.at)}</span></span></button></header>
+      <p>${mineAct ? 'Você adicionou' : 'Adicionou'} ${cards.length === 1 ? `<b>${esc(cards[0].name)}</b> <span class="muted">· ${esc(cards[0].setName)}</span>` : `<b>${cards.length} cartas</b> à coleção`}</p>
+      <div class="post-cards${cards.length === 1 ? ' one' : ''}">${cards.slice(0, 6).map(c => `<button type="button" class="pocket catalog" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c, cards.length === 1 ? 'high' : 'low', c.name)}${store.cards[c.id] && !mineAct ? '<span class="have">✓</span>' : ''}</button>`).join('')}
+        ${cards.length > 6 ? `<span class="more-cards">+${cards.length - 6}</span>` : ''}</div>
+      <footer><button type="button" class="react${a.liked ? ' on' : ''}" data-like="${esc(key)}" aria-pressed="${a.liked}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.600A4 4 0 0 1 19 10c0 5.600-7 10-7 10z"/></svg><span>${a.likes || ''}</span><span class="sr">Curtir</span></button>
+        <button type="button" class="react" data-comments="${esc(key)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span>${a.comments || ''}</span><span class="sr">Comentar</span></button></footer></article>`;
+  }
+  const findAct = key => feed?.find(a => `${a.uid}/${a.aid}` === key);
+  async function toggleLike(key, btn) {
+    const a = findAct(key); if (!a) return;
+    const ref = actRef(a).collection('likes').doc(me.uid);
+    a.liked = !a.liked; a.likes = (a.likes || 0) + (a.liked ? 1 : -1);
+    btn.classList.toggle('on', a.liked); btn.setAttribute('aria-pressed', a.liked); btn.querySelector('span').textContent = a.likes || '';
+    try { a.liked ? await ref.set({ username: mine.username, at: Date.now() }) : await ref.delete(); }
+    catch { toast('Não consegui curtir agora'); }
+  }
+  async function openComments(key) {
+    const a = findAct(key); if (!a) return;
+    openSheet(`<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button><h2>Comentários</h2>
+      <div id="commentList" class="comments"><p class="muted small">Carregando…</p></div>
+      <form id="commentForm" class="comment-form" data-key="${esc(key)}"><input id="commentText" class="field" maxlength="300" placeholder="Escreva um comentário" aria-label="Comentário" autocomplete="off"><button class="btn auto" type="submit">Enviar</button></form>`);
+    drawComments(a);
+  }
+  async function drawComments(a) {
+    const box = $('#commentList'); if (!box) return;
+    try {
+      const snap = await actRef(a).collection('comments').orderBy('at').limit(100).get();
+      a.comments = snap.size;
+      box.innerHTML = snap.size ? snap.docs.map(d => {
+        const c = d.data(), canDelete = c.uid === me.uid || a.uid === me.uid;
+        return `<div class="comment"><button type="button" class="link" data-friend="${esc(c.username)}">@${esc(c.username)}</button> ${esc(c.text)}
+          <span class="muted small">${ago(c.at)}</span>${canDelete ? `<button type="button" class="link muted small" data-uncomment="${esc(d.id)}">apagar</button>` : ''}</div>`;
+      }).join('') : '<p class="muted small">Seja a primeira pessoa a comentar.</p>';
+    } catch { box.innerHTML = '<p class="muted small">Não consegui carregar os comentários.</p>'; }
+  }
+
+  /* ---------- Pessoas ---------- */
   function personRow(username, uid, following, info = '') {
-    return `<div class="person"><button type="button" class="person-main" data-friend="${esc(username)}"><span class="avatar initials">${esc(username.charAt(0).toUpperCase())}</span>
+    return `<div class="person"><button type="button" class="person-main" data-friend="${esc(username)}">${initials(username)}
       <span><b>@${esc(username)}</b>${info ? `<span class="muted small">${esc(info)}</span>` : ''}</span></button>
       ${uid !== me?.uid ? `<button class="btn ${following ? 'alt' : ''} auto" type="button" data-follow="${esc(uid)}" data-username="${esc(username)}">${following ? 'Seguindo' : 'Seguir'}</button>` : ''}</div>`;
   }
@@ -169,15 +315,14 @@ window.Social = (() => {
       try { following = (await db().collection('follows').doc(me.uid).collection('following').doc(uid).get()).exists; } catch { /* sem informação */ }
     }
     if (route.tab !== 'friend' || route.friend !== name) return;
-    const photo = p.photo ? `<img class="avatar" src="${esc(p.photo)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar initials">${esc((p.name || name).charAt(0).toUpperCase())}</span>`;
     const showcase = (p.showcase || []).map(c => ({ ...c, imageEn: c.image }));
     const theyHave = cards ? cards.filter(c => !store.cards[c.id]) : [];
     const inCommon = cards ? cards.filter(c => store.cards[c.id]).length : 0;
     const followBtn = me && uid !== me.uid ? `<button class="btn ${following ? 'alt' : ''}" type="button" data-follow="${esc(uid)}" data-username="${esc(name)}">${following ? 'Seguindo' : 'Seguir'}</button>`
-      : !me ? '<button class="btn" type="button" data-tab="settings">Entre para seguir</button>' : '';
+      : !me ? '<button class="btn" type="button" data-gate>Entre para seguir</button>' : '';
     const sorted = cards ? [...cards].sort((a, b) => String(a.setName).localeCompare(String(b.setName), 'pt-BR') || (parseInt(a.localId, 10) || 0) - (parseInt(b.localId, 10) || 0)) : [];
-    view.innerHTML = `${back}<div class="banner"></div>
-      <div class="identity"><span class="ring-avatar">${photo}</span><h1>${esc(p.name || name)}</h1><span class="muted">@${esc(name)}</span>${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
+    view.innerHTML = `${back}${bannerHtml(p.banner, p.bannerImage)}
+      <div class="identity"><span class="ring-avatar" style="${ringStyle(p.ring)}">${face(p)}</span><h1>${esc(p.name || name)}</h1><span class="muted">@${esc(name)}</span>${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
       ${followBtn}
       <div class="stat-grid">
         <div class="stat"><b>${p.cards ?? 0}</b><span>Cartas</span></div>
@@ -191,7 +336,7 @@ window.Social = (() => {
         ${sorted.length ? `<div class="binder">${sorted.slice(0, 300).map(c => `<button type="button" class="pocket catalog" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${store.cards[c.id] ? '<span class="have">✓</span>' : ''}</button>`).join('')}</div>`
           : '<p class="muted">Ainda sem cartas.</p>'}</div>`
         : p.privacy === 'showcase' ? '<p class="muted">Este perfil mostra só a vitrine.</p>' : ''}
-      ${!me ? '<div class="empty"><h2>Comece sua coleção no Boosterz</h2><p class="muted">Escaneie suas cartas, acompanhe o valor e siga seus amigos.</p><button class="btn" type="button" data-tab="settings">Criar minha conta</button></div>' : ''}`;
+      ${!me ? '<div class="empty"><h2>Comece sua coleção no Boosterz</h2><p class="muted">Escaneie suas cartas, acompanhe o valor e siga seus amigos.</p><button class="btn" type="button" data-gate>Criar minha conta</button></div>' : ''}`;
   }
   function openFromHash() {
     const h = decodeURIComponent(location.hash || '');
@@ -202,6 +347,20 @@ window.Social = (() => {
 
   /* ---------- Eventos ---------- */
   document.addEventListener('submit', async e => {
+    if (e.target.id === 'commentForm') {
+      e.preventDefault();
+      const a = findAct(e.target.dataset.key), input = $('#commentText'), text = input.value.trim();
+      if (!a || !text) return;
+      input.disabled = true;
+      try {
+        await actRef(a).collection('comments').add({ uid: me.uid, username: mine.username, text: text.slice(0, 300), at: Date.now() });
+        input.value = '';
+        await drawComments(a);
+        const n = $(`[data-comments="${CSS.escape(e.target.dataset.key)}"] span`); if (n) n.textContent = a.comments || '';
+      } catch { toast('Não consegui comentar agora'); }
+      input.disabled = false; input.focus();
+      return;
+    }
     if (e.target.id !== 'claimForm') return;
     e.preventDefault();
     const msg = $('#claimMsg'), btn = $('[form="claimForm"]');
@@ -221,15 +380,25 @@ window.Social = (() => {
     if (e.target.id !== 'peopleQ') return;
     clearTimeout(peopleTimer); peopleTimer = setTimeout(() => searchPeople(e.target.value), 250);
   });
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.shareProfile !== undefined) share();
-    else if (b.dataset.follow) toggleFollow(b.dataset.follow, b.dataset.username, b);
-    else if (b.dataset.friend) { history.replaceState(null, '', '#@' + b.dataset.friend); go({ tab: 'friend', friend: b.dataset.friend }); }
-    else if (b.dataset.friendBack !== undefined) { history.replaceState(null, '', location.pathname); go({ tab: me ? 'profile' : 'home', friend: null }); }
+    const d = b.dataset;
+    if (d.shareProfile !== undefined) share();
+    else if (d.follow) toggleFollow(d.follow, d.username, b);
+    else if (d.like) toggleLike(d.like, b);
+    else if (d.comments) openComments(d.comments);
+    else if (d.uncomment) {
+      const key = $('#commentForm')?.dataset.key, a = findAct(key); if (!a) return;
+      try { await actRef(a).collection('comments').doc(d.uncomment).delete(); await drawComments(a); } catch { toast('Não consegui apagar'); }
+    }
+    else if (d.friend) {
+      if (!sheet.hidden) closeSheet();
+      history.replaceState(null, '', '#@' + d.friend); go({ tab: 'friend', friend: d.friend });
+    }
+    else if (d.friendBack !== undefined) { history.replaceState(null, '', location.pathname); go({ tab: me ? 'social' : 'home', friend: null }); }
   });
   window.addEventListener('hashchange', openFromHash);
   openFromHash();
 
-  return { onUser, ownBlock, fillFriends, renderFriend, publishSoon };
+  return { onUser, ownBlock, renderSocial, renderFriend, publishSoon, added, handle };
 })();

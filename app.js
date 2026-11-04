@@ -49,19 +49,26 @@ const preferName = (pt, en) => (store.namesEn ? en || pt : pt || en || '').trim(
 const isPocket = id => /^(A|B)\d+[a-z]?$|^P-/.test(id);
 
 // A lista em inglês é a mais completa; os nomes em português entram por cima quando existem.
+// id -> [nome em português, nome em inglês]
+const SOON = { me06: ['Reinado Delta', 'Delta Reign'] };
 const getSets = () => once('sets', async () => {
   const asianLists = Object.entries(ASIAN).map(([pre, L]) => getJSON(`${API}/${L.api}/sets`).then(list => list.map(s => ({ ...s, pre }))).catch(() => []));
   const [en, pt, extra, ...asian] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({})), ...asianLists]);
   // Logos oficiais em português do site da Pokémon Brasil (tools/br-logos.js) têm prioridade.
-  const ptLogos = await getJSON('data/set-logos-pt.json').catch(() => ({}));
+  const [ptLogos, covers] = await Promise.all([getJSON('data/set-logos-pt.json').catch(() => ({})), getJSON('data/set-covers.json').catch(() => ({}))]);
   const ptById = new Map(pt.map(s => [s.id, s]));
-  return en.filter(s => !isPocket(s.id)).map(s => ({
+  const known = new Set(en.map(s => s.id));
+  // Sets anunciados que a TCGdex ainda não publicou aparecem como "em breve", com o logo oficial.
+  const soon = Object.entries(SOON).filter(([id]) => !known.has(id)).map(([id, [pt, enName]]) => ({
+    id, nameEn: enName, name: preferName(pt, enName), official: 0, total: 0, logoPt: ptLogos[id], serie: 'me', soon: true,
+  }));
+  return soon.concat(en.filter(s => !isPocket(s.id)).map(s => ({
     id: s.id, nameEn: s.name, name: preferName(ptById.get(s.id)?.name, s.name),
     official: s.cardCount.official, total: s.cardCount.total, logoPt: ptLogos[s.id], logo: ptById.get(s.id)?.logo || s.logo, logoAlt: s.logo, logoUrl: extra[s.id],
     symbol: s.symbol || ptById.get(s.id)?.symbol,
     serie: /assets\.tcgdex\.net\/(?:en|pt|univ)\/([^/]+)\//.exec(s.logo || s.symbol || '')?.[1] || /^(me|swsh|sv|sm|xy|bw|hgss|dp|pl|ex|neo|base|gym|ecard)/.exec(s.id)?.[1] || '',
-  })).reverse().concat(...asian.map(list => list.filter(s => !isPocket(s.id)).map(s => ({
-    id: s.pre + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo,
+  })).reverse()).concat(...asian.map(list => list.filter(s => !isPocket(s.id)).map(s => ({
+    id: s.pre + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo, cover: covers[s.pre + s.id],
   })).reverse()));
 });
 // Cartas cadastradas à mão ficam num set próprio, montado a partir da coleção.
@@ -220,6 +227,7 @@ function addGraded(card, g, fromRaw) {
   if (fromRaw && c.qty[g.variant] > 0) { c.qty[g.variant]--; if (!c.qty[g.variant]) delete c.qty[g.variant]; }
   (c.graded ??= []).push({ gid: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...g });
   touched(card.id);
+  if (!fromRaw) window.Social?.added(c);
 }
 function removeGraded(id, gid) {
   const c = store.cards[id]; if (!c?.graded) return;
@@ -240,6 +248,7 @@ function setQty(card, variant, delta) {
   c.qty[variant] = Math.max(0, (c.qty[variant] || 0) + delta);
   if (!c.qty[variant]) delete c.qty[variant];
   touched(card.id);
+  if (delta > 0) window.Social?.added(c);
 }
 async function refreshPrices(onStep) {
   // Cartas cadastradas à mão não têm preço automático.

@@ -9,10 +9,12 @@ let sheetCard = null;
 
 function go(next) { Object.assign(route, next); render(); window.scrollTo(0, 0); }
 function render() {
-  const active = route.tab === 'settings' || route.tab === 'friend' ? 'profile' : route.tab;
+  const active = { settings: 'profile', help: 'profile', reports: 'profile', friend: 'social' }[route.tab] || route.tab;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === active));
   if (window.Desk?.render()) return;
-  ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings, friend: () => window.Social?.renderFriend() })[route.tab]();
+  ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings,
+    social: () => window.Social?.renderSocial(), friend: () => window.Social?.renderFriend(),
+    help: () => window.Help?.renderHelp(), reports: () => window.Help?.renderReports() })[route.tab]?.();
 }
 const plural = (n, one, many) => `${n.toLocaleString('pt-BR')} ${n === 1 ? one : many}`;
 function ownedBySet() {
@@ -30,6 +32,47 @@ function avatar() {
   const photo = store.profile.photo || accountUser()?.photo;
   if (photo) return `<img class="avatar" src="${esc(photo)}" alt="" referrerpolicy="no-referrer">`;
   return `<span class="avatar initials">${esc(trainerName().trim().charAt(0).toUpperCase() || 'T')}</span>`;
+}
+// Fundos do topo do perfil e aros em volta da foto. A chave fica no perfil e vai junto para o perfil público.
+const BANNERS = {
+  aurora: ['Boosterz', 'conic-gradient(from 200deg at 30% 120%, #1f6fff, #7c3aed, #ff5a2e, #ffb02e, #1f6fff)'],
+  fogo: ['Fogo', 'linear-gradient(135deg, #ffcf3f 0%, #ff7a18 45%, #c2185b 100%)'],
+  oceano: ['Oceano', 'linear-gradient(160deg, #3fd8ff 0%, #1f6fff 50%, #142067 100%)'],
+  floresta: ['Floresta', 'linear-gradient(150deg, #b5f05b 0%, #22a06b 50%, #0b3d36 100%)'],
+  eletrico: ['Elétrico', 'radial-gradient(circle at 70% 20%, #fff58a, #ffc23d 30%, #6b3df2 100%)'],
+  psiquico: ['Psíquico', 'linear-gradient(135deg, #ff7ad9 0%, #8b5cf6 55%, #2b1257 100%)'],
+  gelo: ['Gelo', 'linear-gradient(160deg, #ffffff 0%, #a8e9ff 40%, #4f7cff 100%)'],
+  noite: ['Noturno', 'radial-gradient(circle at 20% 30%, #3b3f8f 0%, #141836 55%, #05060f 100%)'],
+  holo: ['Holográfico', 'linear-gradient(115deg, #ff9a9e, #fad0c4, #a1ffce, #8fd3f4, #c2a3ff, #ff9a9e)'],
+};
+const RINGS = {
+  foil: ['Holo', 'var(--foil-round)'],
+  ouro: ['Ouro', 'linear-gradient(160deg, #fff3b0, #ffc23d 45%, #b86b00)'],
+  prata: ['Prata', 'linear-gradient(160deg, #ffffff, #c9d6ea 50%, #6d7f9e)'],
+  ciano: ['Ciano', 'linear-gradient(160deg, #a8f3ff, #3fd8ff 50%, #1f6fff)'],
+  violeta: ['Violeta', 'linear-gradient(160deg, #e3c8ff, #8b5cf6 50%, #4c1d95)'],
+  fogo: ['Fogo', 'linear-gradient(160deg, #ffe169, #ff7417 50%, #c2185b)'],
+  arcoiris: ['Arco-íris', 'conic-gradient(#ff5a5a, #ffc23d, #b5f05b, #3fd8ff, #8b5cf6, #ff5a5a)'],
+  nenhum: ['Sem aro', 'transparent'],
+};
+const ringStyle = key => `background:${(RINGS[key] || RINGS.foil)[1]}`;
+// Fundo a partir de uma carta da coleção: só vale imagem pública (não a foto tirada no aparelho).
+function bannerImage() {
+  const c = store.cards[store.profile.bannerCard];
+  return c?.image && !c.image.startsWith('data:') ? imageUrl(c.image, 'high') : '';
+}
+function bannerHtml(key, image) {
+  if (image) return `<div class="banner art" style="--art:url('${esc(image)}')"></div>`;
+  return `<div class="banner" style="background:${(BANNERS[key] || BANNERS.aurora)[1]}"></div>`;
+}
+function personalize() {
+  const p = store.profile, cards = [...list()].filter(c => c.image && !c.image.startsWith('data:')).sort((a, b) => valueOf(b) - valueOf(a)).slice(0, 40);
+  openSheet(`<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button><h2>Personalizar perfil</h2>
+    <div class="custom-preview">${bannerHtml(p.banner, bannerImage())}<span class="ring-avatar" style="${ringStyle(p.ring)}">${avatar()}</span></div>
+    <h3>Fundo</h3><div class="swatches">${Object.entries(BANNERS).map(([k, [name, bg]]) => `<button type="button" class="swatch${!p.bannerCard && (p.banner || 'aurora') === k ? ' on' : ''}" data-banner="${k}"><i style="background:${bg}"></i><span>${name}</span></button>`).join('')}</div>
+    ${cards.length ? `<h3>Ou a arte de uma carta sua</h3><div class="rail">${cards.map(c => `<button type="button" class="rail-card mini${p.bannerCard === c.id ? ' on' : ''}" data-banner-card="${esc(c.id)}" aria-label="${esc(c.name)}"><span class="frame">${imgTag(c, 'low', c.name)}</span></button>`).join('')}</div>` : ''}
+    <h3>Aro da foto</h3><div class="swatches rings">${Object.entries(RINGS).map(([k, [name, bg]]) => `<button type="button" class="swatch${(p.ring || 'foil') === k ? ' on' : ''}" data-ring="${k}"><i style="background:${bg}"></i><span>${name}</span></button>`).join('')}</div>
+    <button class="btn" type="button" data-close>Concluir</button>`);
 }
 function saveProfile() {
   store.profile.updatedAt = Date.now();
@@ -87,16 +130,20 @@ const setArts = s => [...new Set([!store.namesEn && s.logoPt, s.logo && s.logo +
 const setArt = s => setArts(s)[0] || '';
 const artFallback = s => esc(setArts(s).slice(1).join('|'));
 function setTile(s, have) {
+  if (s.soon) return `<button class="set-tile soon" type="button" data-soon="${esc(s.name)}">
+    <span class="logo">${setArt(s) ? `<img loading="lazy" alt="" data-logo src="${esc(setArt(s))}">` : ''}<em>${esc(setCode(s))}</em></span>
+    <b>${esc(s.name)}</b><span class="soon-tag">Em breve</span></button>`;
   const size = s.total || s.official || 1, pct = Math.min(100, have / size * 100), art = setArt(s);
+  const cover = !art && s.cover ? `<img class="cover" loading="lazy" alt="" data-hide-broken src="${esc(imageUrl(s.cover, 'low'))}">` : '';
   return `<button class="set-tile${have >= size ? ' done' : ''}" type="button" data-set="${esc(s.id)}">
-    <span class="logo${art ? '' : ' nologo'}">${art ? `<img loading="lazy" alt="" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : ''}<em>${esc(setCode(s))}</em></span>
+    <span class="logo${art ? '' : ' nologo'}${cover ? ' has-cover' : ''}">${art ? `<img loading="lazy" alt="" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : cover}<em>${esc(setCode(s))}</em></span>
     <b>${esc(s.name)}</b><span class="bar"><i style="width:${pct}%"></i></span>
     <span class="count"><span>${have}/${size}</span><span>${Math.floor(pct)}%</span></span></button>`;
 }
 document.addEventListener('error', e => {
   const next = e.target.dataset?.next;
   if (next) { const [first, ...rest] = next.split('|'); e.target.dataset.next = rest.join('|'); e.target.src = first; return; }
-  if (e.target.dataset?.hideBroken !== undefined) { e.target.remove(); return; }
+  if (e.target.dataset?.hideBroken !== undefined) { e.target.parentElement?.classList.remove('has-cover'); e.target.parentElement?.classList.add('nologo'); e.target.remove(); return; }
   if (e.target.dataset?.logo === undefined) return;
   e.target.parentElement.classList.add('nologo'); e.target.remove();
 }, true);
@@ -107,9 +154,10 @@ async function renderHome() {
   const top = [...cards].sort((a, b) => valueOf(b) - valueOf(a)).slice(0, 8);
   const recent = [...cards].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8);
   view.innerHTML = `
-    <div class="brand-row"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"></div>
+    <div class="brand-row brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></div>
     <div class="topbar"><div class="hello"><span>Olá, treinador</span><b>${esc(trainerName())}</b></div>
-      <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil">${avatar()}</button></div>
+      <span class="top-actions"><button class="icon-btn" type="button" data-tab="search" aria-label="Explorar cartas"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
+      <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil" style="${ringStyle(store.profile.ring)}">${avatar()}</button></span></div>
     <div class="hero"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
       ${cards.length ? valueChart() : ''}
       <div class="chips"><span class="chip"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'}</span><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div></div>
@@ -136,7 +184,7 @@ async function renderHome() {
 
 /* ---------- Sets ---------- */
 async function renderSets() {
-  view.innerHTML = `<h1>Sets</h1><input id="setFilter" class="field" type="search" placeholder="Procurar set" aria-label="Procurar set" value="${esc(route.q)}" autocomplete="off">
+  view.innerHTML = `<div class="page-head"><h1>Sets</h1><button class="btn alt auto" type="button" data-tab="search">Explorar cartas</button></div><input id="setFilter" class="field" type="search" placeholder="Procurar set" aria-label="Procurar set" value="${esc(route.q)}" autocomplete="off">
     <div class="seg" role="group" aria-label="Quais sets mostrar">${[['west', 'Ocidentais'], ['ja', 'Japoneses'], ['zh', 'Chineses'], ['mine', 'Meus']].map(([k, l]) => `<button type="button" data-region="${k}" class="${route.region === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div id="setList" class="section"><p class="muted">Carregando sets…</p></div>`;
   const draw = (sets, series) => {
@@ -259,7 +307,8 @@ async function drawExplore(all) {
     : `${all.length.toLocaleString('pt-BR')} cartas no catálogo, das mais novas às mais antigas`;
   out.innerHTML = page.length ? `<div class="binder">${page.map(catalogPocket).join('')}</div>
     ${hits.length > page.length ? `<button class="btn alt" type="button" data-more>Mostrar mais ${Math.min(PAGE, hits.length - page.length)}</button>` : ''}`
-    : '<div class="empty"><h2>Nenhuma carta encontrada</h2><p class="muted">Confira a grafia, tente o nome em inglês ou tire algum filtro.</p></div>';
+    : `<div class="empty"><h2>Nenhuma carta encontrada</h2><p class="muted">Confira a grafia, tente o nome em inglês ou tire algum filtro.</p>
+      <button class="btn alt" type="button" data-report="missing" data-report-name="${esc(route.q)}">Avisar que esta carta está faltando</button></div>`;
 }
 // A Busca pela internet continua servindo ao scanner quando a arte não está no banco.
 async function searchCards(q) {
@@ -314,25 +363,96 @@ function showcaseBlock() {
       <span><b>${esc(first.name)}</b><br><span class="muted small">${esc(first.setName)} · ${money(valueOf(first) / qtyOf(first))}</span></span></button>
     <div class="showcase-grid">${slots.join('')}</div></div>`;
 }
+/* ---------- Estatísticas ---------- */
+// Descobre o Pokémon de cada carta pelo nome (Charizard ex, Mega Lucario, リザードン, 噴火龍…) com data/species.json.
+const getSpecies = () => once('species', async () => {
+  const rows = await getJSON('data/species.json');
+  const latin = new Map(), other = [];
+  for (const [dex, en, ...alt] of rows) {
+    latin.set(norm(en), [dex, en]);
+    for (const a of alt) if (a.length > 1) other.push([a, dex, en]);
+  }
+  other.sort((a, b) => b[0].length - a[0].length);
+  return { latin, other, total: rows.length };
+});
+function speciesOf(name, sp) {
+  const words = norm(name).split(' ');
+  for (let n = 3; n >= 1; n--) for (let i = 0; i + n <= words.length; i++) {
+    const hit = sp.latin.get(words.slice(i, i + n).join(' '));
+    if (hit) return hit;
+  }
+  if (/[^\x00-\x7f]/.test(name)) for (const [a, dex, en] of sp.other) if (name.includes(a)) return [dex, en];
+  return null;
+}
+const GENS = [151, 251, 386, 493, 649, 721, 809, 905, 1025];
+const bars = (rows, max = rows[0]?.[1] || 1) => `<div class="bars">${rows.map(([label, n, extra = '']) => `<div class="bar-row"><span class="bar-label">${esc(label)}</span>
+  <span class="bar"><i style="width:${n ? Math.max(3, n / max * 100) : 0}%"></i></span><b class="num">${n.toLocaleString('pt-BR')}</b>${extra}</div>`).join('')}</div>`;
+async function statsBlock() {
+  const cards = list();
+  if (!cards.length) return '<div class="empty"><h2>Sem dados ainda</h2><p class="muted">Adicione cartas para ver as estatísticas da coleção.</p></div>';
+  const sp = await getSpecies().catch(() => null);
+  const bySpecies = new Map();
+  if (sp) for (const c of cards) {
+    const hit = speciesOf(c.nameEn || c.name, sp) || (c.nameEn ? null : speciesOf(c.name, sp)) || speciesOf(c.name, sp);
+    if (!hit) continue;
+    const e = bySpecies.get(hit[0]) || bySpecies.set(hit[0], { dex: hit[0], name: hit[1], n: 0, best: c, kinds: 0 }).get(hit[0]);
+    e.n += qtyOf(c); e.kinds++;
+    if (valueOf(c) / qtyOf(c) > valueOf(e.best) / qtyOf(e.best)) e.best = c;
+  }
+  const species = [...bySpecies.values()].sort((a, b) => b.n - a.n || b.kinds - a.kinds);
+  const gens = GENS.map(() => 0);
+  for (const e of species) gens[GENS.findIndex(g => e.dex <= g)]++;
+  const count = (key, fn = c => qtyOf(c)) => { const m = new Map(); for (const c of cards) { const k = key(c); if (k) m.set(k, (m.get(k) || 0) + fn(c)); } return [...m].sort((a, b) => b[1] - a[1]); };
+  const rarities = count(c => c.rarity).slice(0, 8);
+  const sets = count(c => c.setName).slice(0, 6);
+  const editions = [['Ocidentais', cards.filter(c => !isAsian(c.id)).reduce((a, c) => a + qtyOf(c), 0)], ['Japonesas', cards.filter(c => isJa(c.id)).reduce((a, c) => a + qtyOf(c), 0)], ['Chinesas', cards.filter(c => isAsian(c.id) && !isJa(c.id)).reduce((a, c) => a + qtyOf(c), 0)]].filter(r => r[1]);
+  const variants = new Map();
+  for (const c of cards) for (const [v, n] of Object.entries(c.qty || {})) variants.set(VARIANTS[v]?.label || v, (variants.get(VARIANTS[v]?.label || v) || 0) + n);
+  const graded = cards.reduce((a, c) => a + (c.graded?.length || 0), 0);
+  if (graded) variants.set('Graduadas', graded);
+  const months = [];
+  for (let i = 5; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months.push([d.getFullYear(), d.getMonth(), d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')]); }
+  const perMonth = months.map(([y, m, label]) => [label, cards.filter(c => { const d = new Date(c.addedAt); return d.getFullYear() === y && d.getMonth() === m; }).reduce((a, c) => a + qtyOf(c), 0)]);
+  const maxMonth = Math.max(1, ...perMonth.map(r => r[1]));
+  const top = species.slice(0, 6), copies = copiesCount(), total = collectionValue();
+  const priciest = [...cards].sort((a, b) => valueOf(b) / qtyOf(b) - valueOf(a) / qtyOf(a))[0];
+  return `<div class="stat-grid">
+      <div class="stat"><b>${species.length.toLocaleString('pt-BR')}</b><span>Pokémon diferentes</span></div>
+      <div class="stat"><b>${(sp ? species.length / sp.total * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</b><span>da Pokédex nacional</span></div>
+      <div class="stat"><b>${money(total / Math.max(1, copies))}</b><span>Valor médio por carta</span></div>
+      <div class="stat"><b>${new Set(cards.map(c => c.setId)).size}</b><span>Sets diferentes</span></div></div>
+    ${top.length ? `<div class="section"><h2>Seus Pokémon favoritos</h2><p class="muted small">Os que mais aparecem na sua coleção.</p>
+      <div class="fav-grid">${top.map((e, i) => `<button type="button" class="fav" data-card="${esc(e.best.id)}"><span class="frame">${imgTag(e.best, 'low', e.name)}</span>
+        <span><b>${i === 0 ? '👑 ' : ''}${esc(e.name)}</b><span class="muted small">${plural(e.n, 'carta', 'cartas')} · nº ${String(e.dex).padStart(4, '0')}</span></span></button>`).join('')}</div></div>` : ''}
+    <div class="section"><h2>Pokédex por geração</h2>${bars(gens.map((n, i) => [`${i + 1}ª geração`, n, `<span class="muted small">/${GENS[i] - (GENS[i - 1] || 0)}</span>`]), Math.max(...GENS.map((g, i) => g - (GENS[i - 1] || 0))))}</div>
+    <div class="section"><h2>Cartas adicionadas por mês</h2><div class="months">${perMonth.map(([l, n]) => `<div class="month"><span class="col"><i style="height:${Math.max(2, n / maxMonth * 100)}%"></i></span><b class="num">${n}</b><span class="muted small">${esc(l)}</span></div>`).join('')}</div></div>
+    ${rarities.length ? `<div class="section"><h2>Raridades</h2>${bars(rarities)}</div>` : ''}
+    <div class="section"><h2>Sets com mais cartas</h2>${bars(sets)}</div>
+    <div class="section"><h2>Acabamentos</h2>${bars([...variants].sort((a, b) => b[1] - a[1]))}</div>
+    ${editions.length > 1 ? `<div class="section"><h2>Edições</h2>${bars(editions)}</div>` : ''}
+    ${priciest ? `<div class="section"><h2>Carta mais valiosa</h2>${railCard(priciest, money(valueOf(priciest) / qtyOf(priciest)))}</div>` : ''}`;
+}
+
 async function renderProfile() {
   const cards = list(), p = store.profile, owned = ownedBySet();
   const draw = completed => {
     const list_ = achievements(completed), won = list_.filter(a => a[3]).length;
-    view.innerHTML = `<div class="banner"></div>
+    const ptab = route.ptab || 'showcase', handle = window.Social?.handle?.();
+    view.innerHTML = `${bannerHtml(p.banner, bannerImage())}
       <div class="profile-actions"><button class="icon-btn" type="button" data-tab="settings" aria-label="Ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button></div>
-      <div class="identity"><span class="ring-avatar">${avatar()}</span><h1>${esc(trainerName())}</h1>
-        ${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
-      <button class="btn alt" type="button" data-edit-profile>Editar perfil</button>
-      ${window.Social?.ownBlock() || ''}
+      <div class="identity"><span class="ring-avatar" style="${ringStyle(p.ring)}">${avatar()}</span><h1>${esc(trainerName())}</h1>
+        ${handle ? `<span class="muted">@${esc(handle)}</span>` : ''}${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
+      <div class="row-btns"><button class="btn alt" type="button" data-edit-profile>Editar perfil</button><button class="btn alt" type="button" data-personalize>Personalizar</button></div>
       <div class="stat-grid">
         <div class="stat"><b>${money(collectionValue())}</b><span>Valor da coleção</span></div>
         <div class="stat"><b>${copiesCount()}</b><span>Cartas</span></div>
         <div class="stat"><b>${completed}</b><span>Sets completos</span></div>
         <div class="stat"><b>${won}/${list_.length}</b><span>Conquistas</span></div></div>
-      <div class="section"><div class="section-head"><h2>Vitrine</h2>${showcaseCards().length ? '<button type="button" data-pick>Editar</button>' : ''}</div>${showcaseBlock()}</div>
-      <div class="section"><div class="section-head"><h2>Conquistas</h2></div><div class="badges">${[...list_].sort((a, b) => b[3] - a[3]).map(badge).join('')}</div></div>
-      <div class="section" id="friendsBox"></div>`;
-    window.Social?.fillFriends();
+      <div class="seg" role="tablist" aria-label="Seções do perfil">${[['showcase', 'Vitrine'], ['stats', 'Estatísticas'], ['badges', 'Conquistas']].map(([k, l]) => `<button type="button" role="tab" data-ptab="${k}" aria-selected="${ptab === k}" class="${ptab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div id="ptab">${ptab === 'showcase' ? `<div class="section"><div class="section-head"><h2>Vitrine</h2>${showcaseCards().length ? '<button type="button" data-pick>Editar</button>' : ''}</div>${showcaseBlock()}</div>`
+        : ptab === 'badges' ? `<div class="section"><div class="badges">${[...list_].sort((a, b) => b[3] - a[3]).map(badge).join('')}</div></div>`
+        : '<p class="muted section">Calculando…</p>'}</div>`;
+    if (ptab === 'stats') statsBlock().then(html => { if (route.tab === 'profile' && route.ptab === 'stats' && $('#ptab')) $('#ptab').innerHTML = `<div class="section">${html}</div>`; });
   };
   draw(0);
   if (!cards.length) return;
@@ -380,6 +500,10 @@ function renderSettings() {
   const when = store.pricedAt ? new Date(store.pricedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'ainda não feita';
   view.innerHTML = `<button class="back" type="button" data-tab="profile">‹ Perfil</button><h1>Ajustes</h1>
     <div class="panel section" id="account"></div>
+    ${window.Social?.ownBlock() || ''}
+    <div class="panel"><h2>Ajuda</h2>
+      <button class="btn alt" type="button" data-tab="help">Perguntas frequentes e reportar problema</button>
+      ${window.Help?.adminButton() || ''}</div>
     <div class="panel"><h2>Nomes das cartas e sets</h2>
       <div class="seg" role="group" aria-label="Idioma dos nomes">${[['pt', 'Português'], ['en', 'English']].map(([k, l]) => `<button type="button" data-names="${k}" class="${(store.namesEn ? 'en' : 'pt') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <p class="muted small">Cartas japonesas e chinesas mantêm o nome original. Quando a base não tem a tradução em português, aparece o nome em inglês.</p></div>
@@ -393,7 +517,7 @@ function renderSettings() {
       <button id="exportBtn" class="btn alt" type="button">Exportar coleção</button>
       <button id="importBtn" class="btn alt" type="button">Importar backup</button>
       <p class="muted small">Sem conta, a coleção fica só neste iPhone. Exporte de vez em quando e guarde o arquivo no iCloud Drive.</p></div>
-    <p class="muted small">Dados de cartas: TCGdex. Reconhecimento feito no próprio aparelho. Projeto pessoal, sem vínculo com The Pokémon Company ou Nintendo.</p>`;
+    <p class="muted small">Boosterz está em versão beta. Dados de cartas: TCGdex. Reconhecimento feito no próprio aparelho. Projeto pessoal, sem vínculo com The Pokémon Company ou Nintendo.</p>`;
   window.Sync?.paint();
 }
 
@@ -515,7 +639,7 @@ async function showCard(id) {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${gradedBlock(sheetCard)}${cardExtras(sheetCard)}`;
+    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${gradedBlock(sheetCard)}${cardExtras(sheetCard)}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
 
@@ -546,6 +670,12 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const d = b.dataset;
   if (d.mySets !== undefined) go({ tab: 'sets', setId: null, region: 'mine', q: '' });
+  else if (d.ptab) { route.ptab = d.ptab; renderProfile(); }
+  else if (d.personalize !== undefined) personalize();
+  else if (d.banner) { store.profile.banner = d.banner; delete store.profile.bannerCard; saveProfile(); personalize(); }
+  else if (d.bannerCard) { store.profile.bannerCard = d.bannerCard; saveProfile(); personalize(); }
+  else if (d.ring) { store.profile.ring = d.ring; saveProfile(); personalize(); }
+  else if (d.soon) toast(`${d.soon} ainda não chegou à base de cartas. Assim que chegar, aparece aqui.`);
   else if (d.pick !== undefined) pickShowcase();
   else if (d.editProfile !== undefined) { pendingPhoto = undefined; editProfile(); }
   else if (d.show) { if (toggleShowcase(d.show)) b.classList.toggle('on'); }
