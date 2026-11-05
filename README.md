@@ -30,7 +30,9 @@ O app fica em https://boosterz.web.app (Firebase Hosting, site `boosterz` do pro
 2. `npx firebase-tools deploy --only hosting` (no PowerShell, `npx.cmd`)
 3. `git push` (mantém o repositório e o redirecionamento do endereço antigo)
 
-As regras do Firestore ficam em `firestore.rules` e são publicadas pelo console do Firebase.
+As regras do Firestore ficam em `firestore.rules`: `npx firebase-tools deploy --only firestore:rules`.
+
+Fotos aprovadas pela comunidade: `node tools/bake-photos.js .` (com sharp) e depois `node tools/update-index.js data catalog` para o scanner.
 
 ## Fontes
 
