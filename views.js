@@ -253,9 +253,12 @@ async function renderSet() {
   if (route.tab !== 'sets' || route.setId !== s.id) return;
   const info = meta.find(x => x.id === s.id), logo = info && setArt(info);
   const scope = store.scope[s.id] || 'all';
+  // Sets ocidentais: dá para ver só a edição brasileira ou só a inglesa (arte e "tenho" daquela edição).
+  const editions = hasEditions({ id: s.id, setId: s.id }), ed = editions ? route.setEd || 'all' : 'all';
+  const owns = c => { const o = store.cards[c.id]; return !!o && (ed === 'all' || qtyIn(o, ed) > 0 || !!o.graded?.length); };
   const inScope = s.cards.filter(c => scope === 'all' || (parseInt(c.localId, 10) <= s.official && /^\d+$/.test(c.localId)));
-  const have = inScope.filter(c => store.cards[c.id]).length;
-  const shown = inScope.filter(c => route.filter === 'all' || (route.filter === 'have') === !!store.cards[c.id]);
+  const have = inScope.filter(owns).length;
+  const shown = inScope.filter(c => route.filter === 'all' || (route.filter === 'have') === owns(c));
   const left = inScope.length - have, pct = inScope.length ? have / inScope.length * 100 : 0;
   const value = list().filter(c => c.setId === s.id).reduce((a, c) => a + valueOf(c), 0);
   view.innerHTML = `${back}
@@ -265,15 +268,17 @@ async function renderSet() {
       <div class="seg" role="group" aria-label="Quais cartas contam">
         <button type="button" data-scope="all" class="${scope === 'all' ? 'on' : ''}">Completo (${s.cards.length})</button>
         <button type="button" data-scope="base" class="${scope === 'base' ? 'on' : ''}">Base (${s.official})</button></div>
+      ${editions ? `<div class="seg" role="group" aria-label="Edição">${[['all', 'Todas'], ['pt', 'Brasileira'], ['en', 'Inglês']].map(([k, l]) => `<button type="button" data-set-ed="${k}" class="${ed === k ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
       <div class="seg" role="group" aria-label="Filtro">
         ${[['all', 'Todas'], ['have', 'Tenho'], ['miss', 'Faltam']].map(([k, l]) => `<button type="button" data-filter="${k}" class="${route.filter === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     </div>
-    ${shown.length ? `<div class="binder">${shown.map(pocket).join('')}</div>` : '<p class="muted">Nada para mostrar neste filtro.</p>'}`;
+    ${shown.length ? `<div class="binder">${shown.map(c => pocket(c, ed, owns(c))).join('')}</div>` : '<p class="muted">Nada para mostrar neste filtro.</p>'}`;
 }
-function pocket(c) {
+function pocket(c, ed = 'all', has = !!store.cards[c.id]) {
   const own = store.cards[c.id], star = store.profile.showcase.includes(c.id), slab = own?.graded?.[0];
-  return `<button type="button" class="pocket${own ? '' : ' missing'}" data-card="${esc(c.id)}" aria-label="${esc(c.name)} ${esc(c.localId)}${own ? '' : ', faltando'}">
-    ${imgTag(c)}<span class="tag">${esc(c.localId)}</span>${own && qtyOf(own) > 1 ? `<span class="qty">×${qtyOf(own)}</span>` : ''}${star ? '<span class="star" aria-hidden="true">★</span>' : ''}${slab ? `<span class="slab-tag">${esc(gradeLabel(slab))}</span>` : ''}</button>`;
+  const n = !own ? 0 : ed === 'all' ? qtyOf(own) : qtyIn(own, ed);
+  return `<button type="button" class="pocket${has ? '' : ' missing'}" data-card="${esc(c.id)}" aria-label="${esc(c.name)} ${esc(c.localId)}${has ? '' : ', faltando'}">
+    ${imgTag(ed === 'all' ? c : artFor(c, ed))}<span class="tag">${esc(c.localId)}</span>${n > 1 ? `<span class="qty">×${n}</span>` : ''}${star ? '<span class="star" aria-hidden="true">★</span>' : ''}${slab ? `<span class="slab-tag">${esc(gradeLabel(slab))}</span>` : ''}</button>`;
 }
 
 /* ---------- Busca ---------- */
@@ -655,11 +660,21 @@ document.addEventListener('click', e => {
 });
 const EDITIONS = [['pt', 'Edição brasileira'], ['en', 'Edição em inglês']];
 const pct = f => `${Math.round(f * 100)}%`;
+// Troca a edição no painel aberto: quantidades, valor próprio, rótulo do botão e a arte da carta.
+function refreshEditionUi() {
+  if (!sheetCard) return;
+  const vs = $('#variants'); if (vs) vs.innerHTML = variantRows(sheetCard);
+  const x = $('#extras'); if (x) x.outerHTML = cardExtras(sheetCard);
+  const l = $('[data-edition-label]'); if (l) l.textContent = editionNow(sheetCard) === 'pt' ? 'BR' : 'EN';
+  const art = $('#cardArt'); if (art && hasEditions(sheetCard)) art.innerHTML = imgTag(artFor(sheetCard, editionNow(sheetCard)), 'high', sheetCard.name);
+}
+window.refreshEditionUi = refreshEditionUi;
 function variantRows(card) {
   const mine = store.cards[card.id], own = mine?.qty || {};
   const vs = card.variants.length ? card.variants : ['normal'];
   const lang = editionNow(card), pt = lang === 'pt', other = hasEditions(card) ? qtyIn(mine, pt ? 'en' : 'pt') : 0;
   const toggle = hasEditions(card) ? `<div class="seg edition" role="group" aria-label="Edição da carta">${EDITIONS.map(([k, l]) => `<button type="button" data-edition="${k}" class="${lang === k ? 'on' : ''}" aria-pressed="${lang === k}">${l}</button>`).join('')}</div>
+    ${editionSource === 'scan' ? '<p class="small edition-note">Edição identificada pelo texto impresso na carta. Confira antes de adicionar.</p>' : ''}
     ${other ? `<p class="muted small">Você também tem ${plural(other, 'cópia', 'cópias')} na edição ${pt ? 'em inglês' : 'brasileira'}.</p>` : ''}` : '';
   return toggle + vs.map(v => {
     const key = keyOf(v, lang), p = card.prices?.[v], custom = pt ? mine?.customPt : mine?.custom;
@@ -672,12 +687,14 @@ function variantRows(card) {
   }).join('');
 }
 function cardHead(card) {
-  return `<div class="card-show"><div class="holo" data-tilt>${imgTag(card, 'high', card.name)}</div><div class="info"><h2>${esc(card.name)}</h2>
+  const shown = hasEditions(card) ? artFor(card, editionNow(card)) : card;
+  return `<div class="card-show"><div class="holo" data-tilt id="cardArt">${imgTag(shown, 'high', card.name)}</div><div class="info"><h2>${esc(card.name)}</h2>
     <span class="muted">${esc(card.setName)}${langLabel(card.id) ? ' · ' + langLabel(card.id) : ''}</span><span class="num small muted">Nº ${esc(card.localId)}</span>
     ${card.rarity ? `<span class="rarity">${esc(card.rarity)}</span>` : ''}</div></div>`;
 }
 async function showCard(id) {
   openSheet('<p class="muted">Buscando carta e preço…</p>');
+  if (route.tab === 'sets' && route.setId && ['pt', 'en'].includes(route.setEd)) sheetLang = route.setEd;
   try {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
@@ -714,12 +731,8 @@ document.addEventListener('click', e => {
   const d = b.dataset;
   if (d.mySets !== undefined) go({ tab: 'sets', setId: null, region: 'mine', q: '' });
   else if (d.ptab) { route.ptab = d.ptab; renderProfile(); }
-  else if (d.edition && sheetCard) {
-    sheetLang = d.edition;
-    $('#variants').innerHTML = variantRows(sheetCard);
-    const x = $('#extras'); if (x) x.outerHTML = cardExtras(sheetCard);
-    const l = $('[data-edition-label]'); if (l) l.textContent = d.edition === 'pt' ? 'BR' : 'EN';
-  }
+  else if (d.edition && sheetCard) { sheetLang = d.edition; editionSource = ''; refreshEditionUi(); }
+  else if (d.setEd) { route.setEd = d.setEd; renderSet(); }
   else if (d.editionDefault) { store.edition = d.editionDefault; save(); renderSettings(); }
   else if (d.convertPt !== undefined) {
     if (!confirm('Marcar todas as cópias em inglês das suas cartas ocidentais como edição brasileira?')) return;
@@ -789,6 +802,7 @@ document.addEventListener('submit', e => {
   closeSheet();
 });
 
+migrateEditions();
 render();
 refreshFx();
 setTimeout(autoRefreshPrices, 4000);

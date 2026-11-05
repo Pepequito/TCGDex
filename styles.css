@@ -637,3 +637,5 @@ body.gated #tabs { display: none; }
 .set-tile .logo.pack { padding: 4px; background: radial-gradient(90% 100% at 50% 30%, #26387f, #10173a); }
 .set-tile .logo.pack img { max-height: 78px; filter: drop-shadow(0 4px 8px rgb(0 0 0 / .55)); }
 .set-hero img[src*="icons/sets/ja/"], .set-hero img[src*="icons/sets/zh/"] { max-height: 140px; }
+.edition-note { color: var(--cyan); }
+.controls .seg[aria-label="Edição"] { flex: 1 1 100%; }

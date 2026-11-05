@@ -105,6 +105,8 @@ window.Sync = (() => {
       }
     }
     if (!fromCache) store.synced = snap.docs.map(d => d.id).filter(id => id !== PROFILE);
+    // Cartas antigas vindas da nuvem também passam para a edição brasileira.
+    if (window.migrateEditions?.().length) changed = true;
     status = hasPendingWrites ? 'Salvando na nuvem…' : fromCache ? 'Sem internet. As mudanças sobem depois.' : 'Tudo salvo na nuvem';
     if (changed) { save(); if (sheet.hidden && scanner.hidden) render(); }
     else save();

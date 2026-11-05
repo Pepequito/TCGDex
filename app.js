@@ -151,6 +151,8 @@ function extractPrices(card) {
 const imageUrl = (base, q = 'low') => !base ? '' : base.startsWith('data:') ? base
   : base.startsWith('https://images.pokemontcg.io/') ? base + (q === 'high' ? '_hires.png' : '.png') : `${base}/${q}.webp`;
 function imgTag(c, q = 'low', alt = '') {
+  // Carta que a pessoa só tem na edição em inglês aparece com a arte em inglês nas listas.
+  if (!c.edArt && typeof ownEdition === 'function' && ownEdition(c) === 'en') c = { ...c, image: c.imageEn || store.cards[c.id].imageEn || c.image };
   if (!c.image) return `<div class="noimg">${esc(c.name)}</div>`;
   const fallback = c.imageEn && c.imageEn !== c.image ? imageUrl(c.imageEn, q) : '';
   return `<img loading="lazy" alt="${esc(alt)}" src="${esc(imageUrl(c.image, q))}" data-fallback="${esc(fallback)}">`;
@@ -207,6 +209,31 @@ function editionNow(card) {
   const own = store.cards[card.id], pt = qtyIn(own, 'pt'), en = qtyIn(own, 'en');
   return pt && !en ? 'pt' : en && !pt ? 'en' : store.edition;
 }
+// Arte de uma edição: a brasileira usa a imagem em português (quando a base tem), a inglesa a imagem em inglês.
+const artFor = (c, lang) => ({ ...c, image: lang === 'en' ? c.imageEn || c.image : c.image, edArt: true });
+function ownEdition(c) {
+  const own = store.cards[c.id];
+  if (!own || !hasEditions(c)) return null;
+  const pt = qtyIn(own, 'pt'), en = qtyIn(own, 'en');
+  return en && !pt ? 'en' : pt ? 'pt' : null;
+}
+// Antes da versão com edições, toda cópia ocidental era gravada sem edição e ficou como "inglês".
+// O público do app é brasileiro: cópias gravadas antes dessa versão passam para a edição brasileira, uma vez.
+const EDITIONS_SINCE = 1793879527000 + 3 * 60e3;
+function migrateEditions() {
+  const ids = [];
+  for (const c of Object.values(store.cards)) {
+    if (!hasEditions(c) || (c.updatedAt || c.addedAt || 0) >= EDITIONS_SINCE) continue;
+    let moved = false;
+    for (const [k, n] of Object.entries(c.qty || {})) if (!isPtKey(k)) { c.qty[k + PT] = (c.qty[k + PT] || 0) + n; delete c.qty[k]; moved = true; }
+    if (c.custom != null && c.customPt == null) { c.customPt = c.custom; delete c.custom; moved = true; }
+    c.updatedAt = Date.now();
+    if (moved) ids.push(c.id);
+  }
+  if (ids.length) { save(); window.Sync?.changedAll(ids); }
+  return ids;
+}
+window.migrateEditions = migrateEditions;
 const unitUsd = (c, key) => {
   const pt = isPtKey(key), custom = pt ? c.customPt : c.custom;
   if (custom != null) return customUsd(custom);
@@ -319,7 +346,7 @@ const sheet = $('#sheet'), sheetBack = $('#sheetBack');
 let onSheetClose = null;
 function openSheet(html, onClose = null) {
   sheet.dataset.openedAt = Date.now();
-  sheetLang = null;
+  sheetLang = null; editionSource = '';
   document.body.classList.add('drawer');
   sheet.innerHTML = html; sheet.hidden = sheetBack.hidden = false; sheet.scrollTop = 0; onSheetClose = onClose;
 }
@@ -429,6 +456,18 @@ async function readCode(src, W, H) {
   }
   await w.setParameters({ tessedit_char_whitelist: '' });
   return text.toUpperCase();
+}
+// Edição da carta pelo texto impresso: lê a metade de baixo (ataques, regras, Fraqueza/Resistência/Recuo,
+// texto da Pokédex) e conta palavras comuns de cada língua. O código "PT"/"EN" do canto é pequeno demais para a câmera.
+const PT_WORDS = new Set('de da do das dos que para seu sua seus suas com uma um nao ao aos este esta essa esse quando cada cartas carta dano danos ataque fraqueza resistencia recuo durante coloque compre embaralhe energia energias no na nos nas pelo pela mais sem sobre seja voce oponente banco ativo descarte'.split(' '));
+const EN_WORDS = new Set('the of to your this that when each card cards damage attack weakness resistance retreat during put draw shuffle energy for and from it its opponent bench active discard you if more'.split(' '));
+async function readEdition(src, W, H) {
+  const w = await ocrWorker();
+  await w.setParameters({ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '' });
+  const text = (await w.recognize(crop(src, W * .04, H * .5, W * .92, H * .45, Math.min(2, 1100 / (W * .92))))).data.text;
+  const words = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').match(/[a-z]+/g) || [];
+  const pt = words.filter(x => PT_WORDS.has(x)).length, en = words.filter(x => EN_WORDS.has(x)).length;
+  return pt >= 2 && pt > en * 2 ? 'pt' : en >= 2 && en > pt * 2 ? 'en' : null;
 }
 // `src` é o recorte da carta. O número pode estar no canto esquerdo (atuais) ou direito (antigas).
 async function readCard(src, W, H) {
@@ -658,7 +697,7 @@ async function scanLoop() {
       if (sure) {
         misses = 0; say('Carta encontrada'); shown = top.id;
         cards = await rerank(cards, frame, W, H);
-        if (scanning) { paused = true; showMatch({ cards }); }
+        if (scanning) { paused = true; showMatch({ cards, src: frame }); }
         continue;
       }
       misses++;
@@ -666,14 +705,24 @@ async function scanLoop() {
       // Carta lançada depois de o banco ser gerado: o número impresso ainda resolve.
       if (++frames % 16 === 0) {
         const r = await identify(frame, W, H);
-        if (!paused && scanning && confident(r)) { paused = true; showMatch(r); }
+        if (!paused && scanning && confident(r)) { paused = true; showMatch({ ...r, src: frame }); }
       }
     } catch { say('Sem conexão com o banco de cartas.'); await new Promise(r => setTimeout(r, 1500)); }
   }
 }
 // Quando a mesma arte existe em mais de uma coleção, nada é adicionado sem a coleção estar escolhida.
-function showMatch({ cards }, resume = true) {
+let editionSource = '';
+function showMatch({ cards, src }, resume = true) {
   navigator.vibrate?.(30);
+  // Enquanto a pessoa confere a carta, o texto impresso diz se ela é brasileira ou em inglês.
+  let detected = null;
+  if (src && !isAsian(cards[0].id)) readEdition(src, src.width, src.height).then(lang => {
+    if (!lang) return;
+    detected = lang;
+    if (sheetLang || sheet.hidden || !sheetCard || !hasEditions(sheetCard)) return;
+    sheetLang = lang; editionSource = 'scan';
+    window.refreshEditionUi?.();
+  }).catch(() => {});
   const same = cards.close || 1, facts = cards.facts || {};
   let idx = 0, picked = same < 2 || !!cards.resolved, detail = null;
   const onDone = () => { paused = !resume; if (resume) say('Enquadre a próxima carta'); };
@@ -689,6 +738,7 @@ function showMatch({ cards }, resume = true) {
     catch { sheet.innerHTML = '<p>Sem conexão para buscar esta carta.</p><button class="btn alt" type="button" data-close>Voltar</button>'; return; }
     if (sheet.hidden) return;
     sheetCard = detail;
+    if (detected && !sheetLang) { sheetLang = detected; editionSource = 'scan'; }
     const others = cards.slice(same);
     const choose = same > 1 ? `<div class="section"><p class="${picked ? 'muted small' : 'warn'}">${cards.resolved
       ? 'Coleção identificada pelo código impresso no canto da carta. Confira antes de adicionar.'
@@ -730,9 +780,9 @@ async function fromPhoto(file) {
     const m = await matchArt(inner, w, h, tilt);
     if (m[0].dist < best[0].dist) { best = m; bestSrc = inner; }
   }
-  if (best[0].dist <= MATCH_MAX) { showMatch({ cards: await rerank(best, bestSrc, bestSrc.width, bestSrc.height) }); return; }
+  if (best[0].dist <= MATCH_MAX) { showMatch({ cards: await rerank(best, bestSrc, bestSrc.width, bestSrc.height), src: bestSrc }); return; }
   const r = await identify(bestSrc, bestSrc.width, bestSrc.height);
-  if (r.cards.length) showMatch(r);
+  if (r.cards.length) showMatch({ ...r, src: bestSrc });
   else { paused = false; say('Não reconheci essa foto. Tente de mais perto ou use Buscar.'); if (scanner.hidden) toast('Não reconheci essa carta. Tente uma foto mais de perto.'); }
 }
 
