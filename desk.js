@@ -18,7 +18,7 @@ window.Desk = (() => {
     chrome();
     if (!wide.matches) return false;
     if (route.tab === 'home') { home(); return true; }
-    if (route.tab === 'cards' && route.mview !== 'dupes') { cards(); return true; }
+    if (route.tab === 'cards' && !['dupes', 'wish', 'binders', 'sealed'].includes(route.mview)) { cards(); return true; }
     return false;
   }
 
@@ -45,7 +45,7 @@ window.Desk = (() => {
       <span class="grow"><b>${esc(c.name)}</b><span class="muted small">${esc(sub)}</span></span><span class="num right-val">${right}</span></button>`;
     view.innerHTML = `<div class="page-head"><div><span class="muted">Olá, treinador</span><h1>${esc(trainerName())}</h1></div>
         <div class="quick"><button class="btn alt auto" type="button" data-tab="search">Explorar cartas</button><button class="btn auto" type="button" data-scan>Escanear carta</button></div></div>
-      ${window.Sync?.nudge() || ''}
+      ${window.Sync?.nudge() || ''}${window.Wish?.banner() || ''}
       <section class="portfolio">
         <div class="pf-main">
           <span class="label">Valor da coleção</span>

@@ -161,8 +161,8 @@ function extractPrices(card) {
     const usd = tcg?.marketPrice ?? tcg?.midPrice ?? null;
     // Médias da Cardmarket de 7 e 30 dias: mostram se o preço está subindo ou caindo.
     const holo = v === 'reverse' ? '-holo' : '';
-    const m7 = cm?.['avg7' + holo] || null, m30 = cm?.['avg30' + holo] || null;
-    if (usd != null || eur) out[v] = { usd, eur: eur || null, ...(m7 && m30 ? { m7, m30 } : {}) };
+    const m1 = cm?.['avg1' + holo] || null, m7 = cm?.['avg7' + holo] || null, m30 = cm?.['avg30' + holo] || null;
+    if (usd != null || eur) out[v] = { usd, eur: eur || null, ...(m7 && m30 ? { m7, m30 } : {}), ...(m1 ? { m1 } : {}) };
   }
   return out;
 }
@@ -396,6 +396,7 @@ async function refreshPrices(onStep) {
   // Com metade ou mais falhando (sem internet, servidor fora), não conta como atualizado: tenta de novo depois.
   if (failed < cards.length / 2) store.pricedAt = Date.now();
   save();
+  window.Wish?.recordAll();
   return failed;
 }
 // Uma vez por dia os preços são renovados sozinhos, em segundo plano: ao abrir o app,
@@ -405,10 +406,11 @@ let autoPricing = false;
 async function autoRefreshPrices() {
   if (autoPricing || document.hidden || !navigator.onLine) return;
   if (store.pricedAt && Date.now() - store.pricedAt < PRICE_EVERY) return;
-  if (!list().some(c => c.setId !== 'custom')) return;
+  if (!list().some(c => c.setId !== 'custom') && !window.Wish?.ids().length) return;
   autoPricing = true;
   try {
     await refreshPrices();
+    await window.Wish?.refresh();
     // Atualiza só telas de leitura, para não atrapalhar quem está digitando ou com uma carta aberta.
     const typing = document.activeElement?.matches?.('input, textarea, select');
     if (!typing && sheet.hidden && scanner.hidden && ['home', 'cards', 'profile', 'settings'].includes(route.tab)) render();

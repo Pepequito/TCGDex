@@ -198,7 +198,7 @@ async function renderHome() {
     <div class="hero"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
       ${cards.length ? valueChart() : ''}
       <div class="chips"><button type="button" class="chip" data-mine="all"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'} ›</button><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div></div>
-    ${window.Sync?.nudge() || ''}
+    ${window.Sync?.nudge() || ''}${window.Wish?.banner() || ''}
     ${cards.length ? `
     <div class="section"><div class="section-head"><h2>Mais valiosas</h2><span class="muted small">por carta</span></div><div class="rail">${top.map(c => railCard(c, money(unitValue(c)))).join('')}</div></div>
     <div class="section"><div class="section-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div><div class="tiles" id="mySets"></div></div>
@@ -291,7 +291,7 @@ function pocket(c, ed = 'all', has = !!store.cards[c.id]) {
 }
 
 /* ---------- Minhas cartas (celular) ---------- */
-const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['hot', 'Valorização'], ['all', 'Todas']];
+const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['wish', 'Desejos'], ['hot', 'Valorização'], ['all', 'Todas']];
 function dupeRow(c) {
   const keep = keptCopy(c), spare = spareCopies(c), copies = copiesOf(c);
   return `<article class="dupe">
@@ -312,7 +312,7 @@ function renderMine() {
   const seg = `<div class="seg" role="tablist" aria-label="Minhas cartas">${MINE_TABS.map(([k, l]) => `<button type="button" role="tab" data-mine="${k}" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const grid = list_ => `<div class="binder">${list_.map(c => pocket(c)).join('')}</div>`;
   let body;
-  if (!cards.length) body = '<div class="empty"><h2>Nenhuma carta ainda</h2><p class="muted">Escaneie ou busque cartas para começar.</p><button class="btn" type="button" data-scan>Escanear carta</button></div>';
+  if (!cards.length && !['wish', 'binders', 'sealed'].includes(tab)) body = '<div class="empty"><h2>Nenhuma carta ainda</h2><p class="muted">Escaneie ou busque cartas para começar.</p><button class="btn" type="button" data-scan>Escanear carta</button></div>';
   else if (tab === 'recent') {
     const last = [...cards].sort((a, b) => b.addedAt - a.addedAt).slice(0, 100), groups = new Map();
     for (const c of last) { const k = addedDay(c.addedAt); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
@@ -324,7 +324,10 @@ function renderMine() {
       <p class="muted small">De cada carta, fica na coleção a cópia mais valiosa; as de menor valor contam como repetidas. Se preferir guardar outra, escolha em "Fica na coleção".</p>
       <div class="dupes">${d.map(dupeRow).join('')}</div>`
       : '<div class="empty"><h2>Nenhuma repetida</h2><p class="muted">Quando você tiver mais de uma cópia da mesma carta, ela aparece aqui.</p></div>';
-  } else if (tab === 'hot') {
+  } else if (tab === 'wish') body = window.Wish?.page() || '';
+  else if (tab === 'binders') body = window.Binders?.page() || '';
+  else if (tab === 'sealed') body = window.Binders?.sealedPage() || '';
+  else if (tab === 'hot') {
     const h = cards.map(c => [c, potential(c)]).filter(([, p]) => p?.high).sort((a, b) => b[1].score - a[1].score || valueOf(b[0]) - valueOf(a[0])).map(([c]) => c);
     body = `<p class="muted small">Cartas com sinais de valorização: preço subindo, raridade de alta demanda, Pokémon procurado e set mais antigo. Toque numa carta para ver os motivos. Indicador automático, não é recomendação de investimento.</p>
       ${h.length ? grid(h) : '<div class="empty"><h2>Nenhuma por enquanto</h2><p class="muted">Os sinais de preço chegam com a atualização diária dos preços.</p></div>'}`;
@@ -779,7 +782,7 @@ async function showCard(id) {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}${window.Photos?.sendButton(sheetCard) || ''}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
+    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}${window.Photos?.sendButton(sheetCard) || ''}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${window.Wish?.priceBlock(sheetCard) || ''}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}${window.Wish?.block(sheetCard) || ''}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
 
