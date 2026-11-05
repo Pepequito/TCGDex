@@ -7,8 +7,9 @@
 <meta name="description" content="Escaneie, organize e acompanhe o valor da sua coleção de Pokémon TCG.">
 <meta property="og:title" content="Boosterz · TCG Tracker">
 <meta property="og:description" content="Escaneie suas cartas, acompanhe o valor da coleção e siga seus amigos.">
-<meta property="og:image" content="https://pepequito.github.io/TCGDex/icons/og.jpg">
+<meta property="og:image" content="https://boosterz.web.app/icons/og.jpg">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://boosterz.web.app/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -21,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611051400">
+<link rel="stylesheet" href="styles.css?v=202611051455">
 <style>
 /* Estilo mínimo da abertura, embutido: ela fica certa mesmo se styles.css ainda estiver carregando. */
 #splash { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 14px; background: #080c1b; }
@@ -34,6 +35,18 @@
 <body>
 <div id="splash" aria-hidden="true"><img class="app-icon" src="icons/icon-192.png" alt=""><span class="brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></span></div>
 <script>setTimeout(function () { var s = document.getElementById('splash'); if (s) s.remove(); }, 3000);</script>
+<script>
+/* O Boosterz mudou para boosterz.web.app. Quem abre o endereço antigo vai para o novo; quem usa sem conta
+   e tem cartas salvas aqui vê antes um aviso para exportar o backup (os dados do navegador ficam presos a cada endereço). */
+(function () {
+  if (location.hostname !== 'pepequito.github.io') return;
+  var next = 'https://boosterz.web.app/' + location.search + location.hash, s = {};
+  try { s = JSON.parse(localStorage.getItem('fichario.v1') || '{}'); } catch (e) {}
+  var localOnly = s.gate !== 'account' && s.cards && Object.keys(s.cards).length;
+  if (!localOnly) { location.replace(next); return; }
+  window.__movedTo = next;
+})();
+</script>
 <header id="deskbar">
   <form id="deskSearch" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
     <input id="deskQ" type="search" placeholder="Buscar cartas de qualquer coleção" aria-label="Buscar cartas" autocomplete="off"><kbd>/</kbd></form>
@@ -76,13 +89,13 @@
 <input id="importInput" type="file" accept="application/json,.json" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
-<script src="firebase-config.js?v=202611051400" defer></script>
-<script src="app.js?v=202611051400" defer></script>
-<script src="views.js?v=202611051400" defer></script>
-<script src="desk.js?v=202611051400" defer></script>
-<script src="sync.js?v=202611051400" defer></script>
-<script src="access.js?v=202611051400" defer></script>
-<script src="help.js?v=202611051400" defer></script>
-<script src="social.js?v=202611051400" defer></script>
+<script src="firebase-config.js?v=202611051455" defer></script>
+<script src="app.js?v=202611051455" defer></script>
+<script src="views.js?v=202611051455" defer></script>
+<script src="desk.js?v=202611051455" defer></script>
+<script src="sync.js?v=202611051455" defer></script>
+<script src="access.js?v=202611051455" defer></script>
+<script src="help.js?v=202611051455" defer></script>
+<script src="social.js?v=202611051455" defer></script>
 </body>
 </html>

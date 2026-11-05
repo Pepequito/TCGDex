@@ -673,3 +673,6 @@ button.chip { cursor: pointer; }
 .table .actions .link { margin-left: 10px; }
 .link.danger, .pill.danger { color: var(--danger); }
 .pill.ok { color: #3ddc97; }
+#moved { position: fixed; inset: 0; z-index: 99; display: grid; place-items: center; overflow-y: auto; padding: 24px 16px; background: var(--bg); text-align: center; }
+#moved .moved-steps { text-align: left; display: grid; gap: 6px; margin: 4px 0 8px 20px; color: var(--muted); }
+#moved .btn { width: 100%; }

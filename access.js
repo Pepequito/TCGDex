@@ -229,6 +229,18 @@ window.Access = (() => {
     }
   });
 
+  // Endereço antigo com cartas guardadas só neste navegador: pede para exportar o backup antes de mudar.
+  if (window.__movedTo) {
+    const el = document.createElement('section');
+    el.id = 'moved'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+    el.innerHTML = `<div class="gate-card"><img class="app-icon" src="icons/icon-192.png" alt="">
+      <h2>O Boosterz mudou de endereço</h2>
+      <p class="gate-lead">Agora o app fica em <b>boosterz.web.app</b>. Você usa sem conta, então suas ${list().length} cartas estão salvas só neste endereço antigo.</p>
+      <ol class="moved-steps"><li>Toque em <b>Exportar backup</b> e guarde o arquivo.</li><li>Abra o novo endereço e entre com seu convite.</li><li>Em Ajustes, use <b>Importar backup</b>. Melhor ainda: crie uma conta, e a coleção fica na nuvem.</li></ol>
+      <button class="btn" type="button" id="exportBtn">Exportar backup</button>
+      <a class="btn alt" href="${esc(window.__movedTo)}">Ir para boosterz.web.app</a></div>`;
+    document.body.append(el);
+  }
   (async () => { if (await waitDb()) { loadConfig(); checkGuest(); } })();
   return { onUser, checkKey, enterAsGuest, redeem, normKey, renderAdmin, isAdmin, state: () => state };
 })();
