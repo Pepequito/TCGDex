@@ -57,7 +57,9 @@ async function fetchRetry(url, tries = 3) {
         const img = sharp(Buffer.from(await res.arrayBuffer())).removeAlpha(), m = await img.metadata();
         const raw = await img.extract({ left: Math.round(m.width * ART.x), top: Math.round(m.height * ART.y), width: Math.round(m.width * ART.w), height: Math.round(m.height * ART.h) })
           .resize(S, S, { fit: 'fill', kernel: 'cubic' }).raw().toBuffer();
-        const base = external ? c.image : c.image.replace(`https://assets.tcgdex.net/${c.lg}/`, '').replace(/\/[^/]*$/, '');
+        // Imagem de outro idioma (ex.: trainer kits em espanhol) fica com o endereço completo da carta.
+        const own = `https://assets.tcgdex.net/${c.lg}/`;
+        const base = external ? c.image : c.image.startsWith(own) ? c.image.replace(own, '').replace(/\/[^/]*$/, '') : c.image;
         if (!pathIx.has(base)) { pathIx.set(base, index.paths.length); index.paths.push(base); }
         rows.push([c.key, pathIx.get(base)]);
         hashes.push(hash(raw));

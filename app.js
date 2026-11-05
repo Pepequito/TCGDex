@@ -56,7 +56,7 @@ const getSets = () => once('sets', async () => {
   const asianLists = Object.entries(ASIAN).map(([pre, L]) => getJSON(`${API}/${L.api}/sets`).then(list => list.map(s => ({ ...s, pre }))).catch(() => []));
   const [en, pt, extra, ...asian] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({})), ...asianLists]);
   // Logos oficiais em português do site da Pokémon Brasil (tools/br-logos.js) têm prioridade.
-  const [ptLogos, arts] = await Promise.all([getJSON('data/set-logos-pt.json').catch(() => ({})), getJSON('data/set-art.json').catch(() => ({}))]);
+  const [ptLogos, arts, fans] = await Promise.all(['data/set-logos-pt.json', 'data/set-art.json', 'data/set-fan.json'].map(f => getJSON(f).catch(() => ({}))));
   const ptById = new Map(pt.map(s => [s.id, s]));
   const known = new Set(en.map(s => s.id));
   // Sets anunciados que a TCGdex ainda não publicou aparecem como "em breve", com o logo oficial.
@@ -68,7 +68,7 @@ const getSets = () => once('sets', async () => {
   west.forEach((s, i) => SET_AGE.set(s.id, west.length - 1 - i));
   return soon.concat(en.filter(s => !isPocket(s.id)).map(s => ({
     id: s.id, nameEn: s.name, name: preferName(ptById.get(s.id)?.name, s.name),
-    official: s.cardCount.official, total: s.cardCount.total, logoPt: ptLogos[s.id], logo: ptById.get(s.id)?.logo || s.logo, logoAlt: s.logo, logoUrl: extra[s.id],
+    official: s.cardCount.official, total: s.cardCount.total, logoPt: ptLogos[s.id], logo: ptById.get(s.id)?.logo || s.logo, logoAlt: s.logo, logoUrl: extra[s.id], fan: fans[s.id],
     symbol: s.symbol || ptById.get(s.id)?.symbol,
     serie: /assets\.tcgdex\.net\/(?:en|pt|univ)\/([^/]+)\//.exec(s.logo || s.symbol || '')?.[1] || /^(me|swsh|sv|sm|xy|bw|hgss|dp|pl|ex|neo|base|gym|ecard)/.exec(s.id)?.[1] || '',
   })).reverse()).concat(...asian.map(list => list.filter(s => !isPocket(s.id)).map(s => ({
@@ -275,6 +275,8 @@ const unitUsd = (c, key) => {
   const base = toUsd(c.prices?.[variantOfKey(key)]) || 0;
   return pt ? base * store.ptFactor : base;
 };
+// Valor de uma cópia: o total dividido pelo número de cópias (para ordenar as cartas mais valiosas).
+const unitValue = c => qtyOf(c) ? valueOf(c) / qtyOf(c) : 0;
 const valueOf = c => Object.entries(c.qty || {}).reduce((s, [k, n]) => s + n * unitUsd(c, k), 0)
   + (c.graded || []).reduce((s, g) => s + gradedUsd(c, g), 0);
 const gradeLabel = g => `${g.company} ${g.grade}`;

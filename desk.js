@@ -32,7 +32,7 @@ window.Desk = (() => {
   async function home() {
     const all = list(), total = collectionValue(), copies = copiesCount();
     trackValue(total);
-    const top = [...all].sort((a, b) => valueOf(b) - valueOf(a)).slice(0, 6);
+    const top = [...all].sort((a, b) => unitValue(b) - unitValue(a)).slice(0, 6);
     const recent = [...all].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8);
     const won = achievements(0).filter(a => a[3]).length, show = showcaseCards().slice(0, 3);
     view.innerHTML = `<div class="page-head"><div><span class="muted">Olá, treinador</span><h1>${esc(trainerName())}</h1></div></div>
@@ -49,11 +49,11 @@ window.Desk = (() => {
         <section class="panel span-7"><div class="panel-head"><h2>Mais valiosas</h2><button type="button" data-tab="cards">Ver todas</button></div>
           ${top.length ? `<table class="table compact"><tbody>${top.map((c, i) => `<tr data-card="${esc(c.id)}" tabindex="0">
             <td class="num muted rank">${i + 1}</td><td class="thumb">${imgTag(c, 'low', '')}</td>
-            <td><b>${esc(c.name)}</b><span class="muted small">${esc(c.setName)} · ${esc(c.localId)}</span></td><td class="num right">${money(valueOf(c))}</td></tr>`).join('')}</tbody></table>`
+            <td><b>${esc(c.name)}</b><span class="muted small">${esc(c.setName)} · ${esc(c.localId)}</span></td><td class="num right">${money(unitValue(c))}</td></tr>`).join('')}</tbody></table>`
             : '<p class="muted">Nenhuma carta ainda.</p>'}</section>
         <section class="panel span-5"><div class="panel-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div>
           <div class="set-rows" id="deskSets">${all.length ? '<p class="muted">Carregando…</p>' : '<p class="muted">Os sets das suas cartas aparecem aqui.</p>'}</div></section>
-        ${recent.length ? `<section class="span-12 section"><div class="panel-head"><h2>Adicionadas recentemente</h2><button type="button" data-mine="recent">Ver as últimas 100</button></div>
+        ${recent.length ? `<section class="span-12 section"><div class="panel-head"><h2><button type="button" class="head-link" data-mine="recent">Adicionadas recentemente ›</button></h2><button type="button" data-mine="recent">Ver as últimas 100</button></div>
           <div class="thumb-grid">${recent.map(c => `<button type="button" class="thumb-card" data-card="${esc(c.id)}"><span class="frame">${imgTag(c, 'low', c.name)}</span><b>${esc(c.name)}</b><span class="muted small">${esc(c.setName)}</span></button>`).join('')}</div></section>` : ''}
       </div>`;
     bindChart();

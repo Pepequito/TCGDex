@@ -164,7 +164,7 @@ function setTile(s, have) {
     <b>${esc(s.name)}</b><span class="soon-tag">Em breve</span></button>`;
   const size = s.total || s.official || 1, pct = Math.min(100, have / size * 100), art = setArt(s);
   return `<button class="set-tile${have >= size ? ' done' : ''}" type="button" data-set="${esc(s.id)}">
-    <span class="logo${art ? '' : ' nologo'}${s.art && art === s.art ? ' pack' : ''}">${art ? `<img loading="lazy" alt="" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : ''}<em>${esc(setCode(s))}</em></span>
+    <span class="logo${art ? '' : s.fan ? ' has-fan' : ' nologo'}${s.art && art === s.art ? ' pack' : ''}">${art ? `<img loading="lazy" alt="" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : ''}${!art && s.fan ? `<span class="fan">${s.fan.map(u => `<img loading="lazy" alt="" data-hide-broken src="${esc(imageUrl(u, 'low'))}">`).join('')}</span>` : ''}<em>${esc(setCode(s))}</em></span>
     <b>${esc(s.name)}</b><span class="bar"><i style="width:${pct}%"></i></span>
     <span class="count"><span>${have}/${size}</span><span>${Math.floor(pct)}%</span></span></button>`;
 }
@@ -179,7 +179,7 @@ document.addEventListener('error', e => {
 async function renderHome() {
   const cards = list(), total = collectionValue(), copies = copiesCount();
   trackValue(total);
-  const top = [...cards].sort((a, b) => valueOf(b) - valueOf(a)).slice(0, 8);
+  const top = [...cards].sort((a, b) => unitValue(b) - unitValue(a)).slice(0, 8);
   const recent = [...cards].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8);
   view.innerHTML = `
     <div class="brand-row brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></div>
@@ -191,9 +191,9 @@ async function renderHome() {
       <div class="chips"><button type="button" class="chip" data-mine="all"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'} ›</button><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div></div>
     ${window.Sync?.nudge() || ''}
     ${cards.length ? `
-    <div class="section"><div class="section-head"><h2>Mais valiosas</h2></div><div class="rail">${top.map(c => railCard(c, money(valueOf(c)))).join('')}</div></div>
+    <div class="section"><div class="section-head"><h2>Mais valiosas</h2><span class="muted small">por carta</span></div><div class="rail">${top.map(c => railCard(c, money(unitValue(c)))).join('')}</div></div>
     <div class="section"><div class="section-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div><div class="tiles" id="mySets"></div></div>
-    <div class="section"><div class="section-head"><h2><button type="button" class="head-link" data-mine="recent">Adicionadas recentemente ›</button></h2><button type="button" data-mine="dupes">Repetidas</button></div><div class="rail">${recent.map(c => railCard(c)).join('')}</div></div>`
+    <div class="section"><div class="section-head"><h2><button type="button" class="head-link" data-mine="recent">Adicionadas recentemente ›</button></h2><button type="button" data-mine="recent">Ver as últimas 100</button></div><div class="rail">${recent.map(c => railCard(c)).join('')}</div></div>`
     : `<div class="empty"><h2>Sua coleção está vazia</h2>
        <p class="muted">Aponte a câmera para a primeira carta. O app reconhece a arte e você confirma antes de adicionar.</p>
        <button class="btn" type="button" data-scan>Escanear a primeira carta</button></div>`}`;
@@ -307,7 +307,7 @@ function renderMine() {
     const h = cards.map(c => [c, potential(c)]).filter(([, p]) => p?.high).sort((a, b) => b[1].score - a[1].score || valueOf(b[0]) - valueOf(a[0])).map(([c]) => c);
     body = `<p class="muted small">Cartas com sinais de valorização: preço subindo, raridade de alta demanda, Pokémon procurado e set mais antigo. Toque numa carta para ver os motivos. Indicador automático, não é recomendação de investimento.</p>
       ${h.length ? grid(h) : '<div class="empty"><h2>Nenhuma por enquanto</h2><p class="muted">Os sinais de preço chegam com a atualização diária dos preços.</p></div>'}`;
-  } else body = grid([...cards].sort((a, b) => valueOf(b) - valueOf(a)));
+  } else body = grid([...cards].sort((a, b) => unitValue(b) - unitValue(a)));
   view.innerHTML = `<button class="back" type="button" data-tab="home">‹ Coleção</button>
     <div class="page-head"><div><h1>Minhas cartas</h1><span class="muted">${plural(copiesCount(), 'carta', 'cartas')} · ${money(collectionValue())}</span></div></div>${seg}${body}`;
 }
@@ -538,7 +538,7 @@ async function renderProfile() {
   if (completed && route.tab === 'profile') draw(completed);
 }
 function pickShowcase() {
-  const cards = [...list()].sort((a, b) => valueOf(b) - valueOf(a));
+  const cards = [...list()].sort((a, b) => unitValue(b) - unitValue(a));
   openSheet(`<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button><h2>Escolha até ${SHOWCASE_MAX} cartas</h2>
     <p class="muted small">A primeira escolhida fica em destaque.</p>
     <div class="picker">${cards.map(c => `<button type="button" class="pocket${store.profile.showcase.includes(c.id) ? ' on' : ''}" data-show="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c)}</button>`).join('')}</div>
