@@ -763,7 +763,7 @@ button.chip { cursor: pointer; }
   :root[data-theme="light"] .table td { border-bottom-color: var(--line); }
 }
 /* Modo claro: versão do logo sem o halo escuro (tools/logo-light.js), sem placa de fundo. */
-:root[data-theme="light"] #brand .logo, :root[data-theme="light"] .brand-row .logo, :root[data-theme="light"] .gate-card .logo { content: url("icons/logo-light.webp"); }
+:root[data-theme="light"] #brand .logo, :root[data-theme="light"] .brand-row .logo, :root[data-theme="light"] .gate-card .logo { content: url("icons/logo-light.webp?v=2"); }
 :root[data-theme="light"] .brand-lock .beta { background: #e6f6fd; }
 @media (min-width: 1024px) { #view > .btn.alt[data-gate] { align-self: flex-start; justify-self: start; width: auto; } }
 /* ---------- Repetidas ---------- */
