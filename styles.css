@@ -656,3 +656,20 @@ button.chip { cursor: pointer; }
 .suggestion .why { display: block; margin-top: 2px; color: var(--cyan); }
 .suggestion .person-main .avatar { width: 40px; height: 40px; }
 .feed h2 { font-size: 17px; margin-top: 6px; }
+/* ---------- Beta fechado e admin ---------- */
+#lock { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; overflow-y: auto; padding: calc(env(safe-area-inset-top, 0px) + 24px) 16px 24px; background: radial-gradient(120% 70% at 50% 0%, #1b2a6b 0%, transparent 60%), var(--bg); }
+#lock h2 { font-size: 22px; }
+#lock .account { width: 100%; display: grid; gap: 10px; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.gate-key { width: 100%; display: grid; gap: 6px; text-align: left; }
+.key-field { font: 600 18px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+#notice { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 14px; padding-top: calc(env(safe-area-inset-top, 0px) + 8px); background: linear-gradient(90deg, #ffb52e, #ff7417); color: #1a1205; font-weight: 600; font-size: 14px; text-align: center; }
+#notice button { font-weight: 700; color: inherit; }
+#tabs .admin-only { display: none !important; }
+@media (min-width: 1024px) { body.is-admin #tabs .admin-only { display: grid !important; } }
+.admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+.admin-form { display: grid; gap: 8px; }
+.admin-form label { display: grid; gap: 4px; }
+.table .actions { white-space: nowrap; }
+.table .actions .link { margin-left: 10px; }
+.link.danger, .pill.danger { color: var(--danger); }
+.pill.ok { color: #3ddc97; }

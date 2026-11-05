@@ -4,7 +4,7 @@
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
 const v = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
-const own = /(href|src)="((?:styles\.css|firebase-config\.js|app\.js|views\.js|desk\.js|sync\.js|social\.js|help\.js))(?:\?v=\d+)?"/g;
+const own = /(href|src)="((?:styles\.css|firebase-config\.js|app\.js|views\.js|desk\.js|sync\.js|social\.js|help\.js|access\.js))(?:\?v=\d+)?"/g;
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(own, (_, attr, file) => `${attr}="${file}?v=${v}"`);
 fs.writeFileSync(path.join(root, 'index.html'), html);
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8').replace(/const SHELL = '[^']*'/, `const SHELL = 'boosterz-shell-${v}'`);

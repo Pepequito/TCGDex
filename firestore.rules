@@ -4,17 +4,61 @@ service cloud.firestore {
     function isMe(uid) { return request.auth != null && request.auth.uid == uid; }
     function profile(uid) { return get(/databases/$(database)/documents/profiles/$(uid)).data; }
     function hasProfile(uid) { return exists(/databases/$(database)/documents/profiles/$(uid)); }
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'pedrohblour@gmail.com' && request.auth.token.email_verified == true;
+    }
+    // Beta fechado: só quem entrou com convite (e não foi bloqueado) grava qualquer coisa.
+    function isMember() {
+      return request.auth != null && (isAdmin()
+        || (exists(/databases/$(database)/documents/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.blocked != true));
+    }
+    function paused() {
+      return exists(/databases/$(database)/documents/config/app) && get(/databases/$(database)/documents/config/app).data.paused == true;
+    }
 
-    // Coleção: o dono lê e escreve; outras pessoas só leem se o dono deixou o perfil público.
+    // Configuração geral (aviso e pausa de cadastros): todos leem, só o admin muda.
+    match /config/{name} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Convites: qualquer um confere um código pelo nome; só o admin lista, cria e apaga.
+    // Quem entra com o código soma 1 ao uso, no mesmo lote em que vira membro, uma única vez.
+    match /invites/{code} {
+      allow get: if true;
+      allow list, create, delete: if isAdmin();
+      allow update: if isAdmin() || (request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses'])
+        && request.resource.data.uses == resource.data.uses + 1
+        && resource.data.active == true && resource.data.uses < resource.data.maxUses
+        && !exists(/databases/$(database)/documents/members/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/members/$(request.auth.uid)).data.code == code);
+    }
+
+    // Membros: a pessoa vira membro com um convite válido; o admin vê todos e bloqueia ou desbloqueia.
+    match /members/{uid} {
+      allow get: if isMe(uid) || isAdmin();
+      allow list, delete: if isAdmin();
+      allow create: if isMe(uid) && !paused()
+        && request.resource.data.blocked == false
+        && request.resource.data.code is string
+        && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.code)).data.uses
+          == get(/databases/$(database)/documents/invites/$(request.resource.data.code)).data.uses + 1;
+      allow update: if isAdmin()
+        || (isMe(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen', 'name', 'email']));
+    }
+
+    // Coleção: o dono (membro) lê e escreve; outras pessoas só leem se o dono deixou o perfil público.
     match /users/{uid}/cards/{cardId} {
-      allow read: if isMe(uid) || (hasProfile(uid) && profile(uid).privacy == 'public');
-      allow write: if isMe(uid);
+      allow read: if (isMe(uid) && isMember()) || (hasProfile(uid) && profile(uid).privacy == 'public');
+      allow write: if isMe(uid) && isMember();
     }
 
     // Perfil público: qualquer um lê, menos quando o dono escolheu "privado".
     match /profiles/{uid} {
       allow read: if isMe(uid) || (resource != null && resource.data.privacy != 'private');
-      allow write: if isMe(uid) && request.resource.data.uid == uid
+      allow write: if isMe(uid) && isMember() && request.resource.data.uid == uid
         && request.resource.data.privacy in ['public', 'showcase', 'private'];
       allow delete: if isMe(uid);
     }
@@ -22,7 +66,7 @@ service cloud.firestore {
     // Nome de usuário único: só dá para criar um nome livre, e só o dono apaga o próprio.
     match /usernames/{name} {
       allow read: if true;
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+      allow create: if isMember() && request.resource.data.uid == request.auth.uid
         && name.matches('^[a-z0-9_]{3,20}$');
       allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
@@ -30,39 +74,40 @@ service cloud.firestore {
     // Quem eu sigo (só eu altero) e quem me segue (cada um altera só a própria entrada).
     match /follows/{uid}/following/{other} {
       allow read: if true;
-      allow write: if isMe(uid);
+      allow write: if isMe(uid) && isMember();
     }
     match /followers/{uid}/list/{other} {
       allow read: if true;
-      allow write: if isMe(other);
+      allow write: if isMe(other) && isMember();
     }
+
     // Atividade (cartas adicionadas): o dono escreve; amigos leem se o perfil não for privado.
     match /users/{uid}/activity/{aid} {
       allow read: if isMe(uid) || (request.auth != null && hasProfile(uid) && profile(uid).privacy != 'private');
-      allow write: if isMe(uid);
+      allow write: if isMe(uid) && isMember();
 
       // Curtida: uma por pessoa, com o próprio uid como id.
       match /likes/{liker} {
         allow read: if request.auth != null;
-        allow create: if isMe(liker) && request.resource.data.keys().hasOnly(['username', 'at']);
+        allow create: if isMe(liker) && isMember() && request.resource.data.keys().hasOnly(['username', 'at']);
         allow delete: if isMe(liker);
       }
       // Comentário: quem escreveu apaga; o dono do post também.
       match /comments/{cid} {
         allow read: if request.auth != null;
-        allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+        allow create: if isMember() && request.resource.data.uid == request.auth.uid
           && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 300
           && request.resource.data.keys().hasOnly(['uid', 'username', 'text', 'at']);
         allow delete: if request.auth != null && (resource.data.uid == request.auth.uid || isMe(uid));
       }
     }
 
-    // Relatos de problema: qualquer pessoa envia (até convidado); só o desenvolvedor lê e apaga.
+    // Relatos de problema: qualquer pessoa envia (até convidado); só o admin lê e apaga.
     match /reports/{rid} {
       allow create: if request.resource.data.text is string && request.resource.data.text.size() <= 1000
         && request.resource.data.photo is string && request.resource.data.photo.size() <= 400000
         && request.resource.data.name is string && request.resource.data.name.size() <= 80;
-      allow read, delete: if request.auth != null && request.auth.token.email == 'pedrohblour@gmail.com' && request.auth.token.email_verified == true;
+      allow read, delete: if isAdmin();
     }
   }
 }

@@ -9,12 +9,12 @@ let sheetCard = null;
 
 function go(next) { Object.assign(route, next); render(); window.scrollTo(0, 0); }
 function render() {
-  const active = { settings: 'profile', help: 'profile', reports: 'profile', friend: 'social' }[route.tab] || route.tab;
+  const active = { settings: 'profile', help: 'profile', reports: 'admin', friend: 'social' }[route.tab] || route.tab;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === active));
   if (window.Desk?.render()) return;
   ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings, cards: renderMine,
     social: () => window.Social?.renderSocial(), friend: () => window.Social?.renderFriend(),
-    help: () => window.Help?.renderHelp(), reports: () => window.Help?.renderReports() })[route.tab]?.();
+    help: () => window.Help?.renderHelp(), reports: () => window.Help?.renderReports(), admin: () => window.Access?.renderAdmin() })[route.tab]?.();
 }
 const plural = (n, one, many) => `${n.toLocaleString('pt-BR')} ${n === 1 ? one : many}`;
 function ownedBySet() {

@@ -61,6 +61,7 @@ window.Sync = (() => {
     if (user) { status = 'Sincronizando…'; start(); }
     window.Social?.onUser(user);
     if (user) { store.gate = 'account'; save(); hideGate(); }
+    window.Access?.onUser(user);
     paint(); render();
   }
   // Primeira vez deste usuário neste aparelho: lê tudo do servidor e junta com o que já existe aqui.
@@ -145,7 +146,7 @@ window.Sync = (() => {
   /* ---------- Tela de entrada ---------- */
   // Na primeira abertura a pessoa escolhe: entrar, criar conta ou seguir como convidado (dados só no aparelho).
   store.gate ??= store.synced?.length ? 'account' : null;
-  function showGate() {
+  function showGate(message = '') {
     if (!config || user || document.getElementById('gate')) return;
     const g = document.createElement('section');
     g.id = 'gate'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-modal', 'true'); g.setAttribute('aria-label', 'Entrar no Boosterz');
@@ -153,6 +154,10 @@ window.Sync = (() => {
     g.innerHTML = `<div class="gate-card">${again ? '<button class="sheet-x" type="button" data-guest aria-label="Fechar">✕</button>' : ''}
       <img class="app-icon" src="icons/icon-192.png" alt=""><div class="brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></div>
       <p class="gate-lead">Escaneie, organize e acompanhe o valor da sua coleção de Pokémon TCG.</p>
+      <div class="gate-key"><label for="gateKey"><b>Código de convite</b></label>
+        <input id="gateKey" class="field key-field" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="Ex.: BZ7KQ2MX" value="${esc(store.pendingKey || store.accessKey || '')}">
+        <p class="muted small">O Boosterz está em beta fechado. Para criar conta ou usar sem conta, você precisa de um convite. Quem já tem conta liberada pode só entrar.</p>
+        <p class="small warn" id="gateMsg"${message ? '' : ' hidden'}>${esc(message)}</p></div>
       <div class="account"></div>
       <div class="gate-guest"><button class="btn ghost-btn" type="button" data-guest>${again ? 'Continuar sem conta' : 'Continuar como convidado'}</button>
         <p class="small warn">⚠︎ Como convidado, a coleção fica salva só na memória deste aparelho. Se você limpar os dados do navegador, trocar de celular ou remover o app, pode perder tudo. Dá para criar a conta depois, em Ajustes, sem perder as cartas.</p></div></div>`;
@@ -168,9 +173,22 @@ window.Sync = (() => {
   document.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.guest !== undefined) {
-      if (store.gate !== 'guest') toast('Modo convidado: lembre de exportar um backup de vez em quando');
-      store.gate = 'guest'; save(); hideGate();
+      // Quem já é convidado com código válido só fecha a tela; senão, o código precisa ser conferido.
+      if (store.gate === 'guest' && store.accessKey && b.classList.contains('sheet-x')) { hideGate(); return; }
+      const msg = document.getElementById('gateMsg');
+      b.disabled = true;
+      window.Access.enterAsGuest(document.getElementById('gateKey')?.value || '').then(err => {
+        b.disabled = false;
+        if (err) { if (msg) { msg.textContent = err; msg.hidden = false; } return; }
+        toast('Modo convidado: lembre de exportar um backup de vez em quando');
+        hideGate();
+      });
     } else if (b.dataset.gate !== undefined) showGate();
+  });
+  // O código digitado vale para a conta que for criada ou entrar a seguir.
+  document.addEventListener('input', e => {
+    if (e.target.id !== 'gateKey') return;
+    store.pendingKey = window.Access.normKey(e.target.value); save();
   });
 
   function paint() {
