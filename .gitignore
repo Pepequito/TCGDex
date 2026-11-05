@@ -1,3 +1,4 @@
 node_modules/
 thumbs.bin
 thumbs.ndjson
+.firebase/
