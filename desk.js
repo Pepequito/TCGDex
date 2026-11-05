@@ -33,30 +33,47 @@ window.Desk = (() => {
   async function home() {
     const all = list(), total = collectionValue(), copies = copiesCount();
     trackValue(total);
+    const range = route.range || '30';
     const top = [...all].sort((a, b) => unitValue(b) - unitValue(a)).slice(0, 6);
-    const recent = [...all].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8);
-    const won = achievements(0).filter(a => a[3]).length, show = showcaseCards().slice(0, 3);
-    view.innerHTML = `<div class="page-head"><div><span class="muted">Olá, treinador</span><h1>${esc(trainerName())}</h1></div></div>
+    const recent = [...all].sort((a, b) => b.addedAt - a.addedAt).slice(0, 6);
+    const show = showcaseCards().slice(0, 9);
+    const dupes = all.filter(c => qtyOf(c) > 1), spare = dupes.reduce((s, c) => s + spareValue(c), 0);
+    const hot = all.filter(c => potential(c)?.high).length;
+    const ch = valueChange(range);
+    const when = t => { const d = (Date.now() - t) / 864e5; return d < 1 ? 'hoje' : d < 2 ? 'ontem' : `há ${Math.floor(d)} dias`; };
+    const row = (c, right, sub) => `<button type="button" class="list-row" data-card="${esc(c.id)}"><span class="thumb">${imgTag(c, 'low', '')}</span>
+      <span class="grow"><b>${esc(c.name)}</b><span class="muted small">${esc(sub)}</span></span><span class="num right-val">${right}</span></button>`;
+    view.innerHTML = `<div class="page-head"><div><span class="muted">Olá, treinador</span><h1>${esc(trainerName())}</h1></div>
+        <div class="quick"><button class="btn alt auto" type="button" data-tab="search">Explorar cartas</button><button class="btn auto" type="button" data-scan>Escanear carta</button></div></div>
       ${window.Sync?.nudge() || ''}
-      <div class="dash">
-        <section class="hero span-8"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
-          ${all.length ? valueChart() : '<p class="muted">Escaneie ou busque cartas para começar a acompanhar o valor.</p>'}
-          <div class="chips"><span class="chip"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'}</span><span class="chip"><b>${all.length}</b> ${all.length === 1 ? 'diferente' : 'diferentes'}</span></div></section>
-        <aside class="panel span-4 mini-profile">
-          <div class="who"><span class="ring-avatar">${avatar()}</span><div><b>${esc(trainerName())}</b><span class="muted small">${won} de ${achievements(0).length} conquistas</span></div></div>
-          ${show.length ? `<div class="mini-show">${show.map(c => `<button type="button" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c, 'low', c.name)}</button>`).join('')}</div>`
-            : '<p class="muted small">Sua vitrine está vazia. Escolha cartas favoritas no perfil.</p>'}
-          <button class="btn alt" type="button" data-tab="profile">Ver perfil</button></aside>
-        <section class="panel span-7"><div class="panel-head"><h2>Mais valiosas</h2><button type="button" data-tab="cards">Ver todas</button></div>
-          ${top.length ? `<table class="table compact"><tbody>${top.map((c, i) => `<tr data-card="${esc(c.id)}" tabindex="0">
-            <td class="num muted rank">${i + 1}</td><td class="thumb">${imgTag(c, 'low', '')}</td>
-            <td><b>${esc(c.name)}</b><span class="muted small">${esc(c.setName)} · ${esc(c.localId)}</span></td><td class="num right">${money(unitValue(c))}</td></tr>`).join('')}</tbody></table>`
-            : '<p class="muted">Nenhuma carta ainda.</p>'}</section>
-        <section class="panel span-5"><div class="panel-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div>
+      <section class="portfolio">
+        <div class="pf-main">
+          <span class="label">Valor da coleção</span>
+          <span class="value">${money(total)}</span>
+          ${ch ? `<span class="delta ${ch.diff >= 0 ? 'up' : 'down'}">${ch.diff >= 0 ? '▲' : '▼'} ${money(Math.abs(ch.diff))} (${ch.pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%) <span class="muted">${ch.label}</span></span>` : '<span class="muted small">A variação aparece a partir do segundo dia de uso.</span>'}
+          <div class="pf-stats">
+            <button type="button" data-mine="all"><b>${copies}</b><span>Cartas</span></button>
+            <button type="button" data-mine="all"><b>${all.length}</b><span>Diferentes</span></button>
+            <button type="button" data-mine="dupes"><b>${money(spare)}</b><span>Em repetidas</span></button>
+            <button type="button" data-mine="hot"><b>${hot}</b><span>📈 Valorizando</span></button>
+          </div>
+        </div>
+        <div class="pf-chart">
+          <div class="seg range" role="group" aria-label="Período do gráfico">${[['7', '7D'], ['30', '1M'], ['90', '3M'], ['all', 'Tudo']].map(([k, l]) => `<button type="button" data-range="${k}" class="${range === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+          ${all.length ? valueChart(range) : '<p class="muted">Escaneie ou busque cartas para começar a acompanhar o valor.</p>'}
+        </div>
+      </section>
+      <div class="dash3">
+        <section class="panel"><div class="panel-head"><h2>Mais valiosas</h2><button type="button" data-mine="all">Ver todas</button></div>
+          <div class="list">${top.length ? top.map(c => row(c, money(unitValue(c)), `${c.setName} · ${c.localId}`)).join('') : '<p class="muted">Nenhuma carta ainda.</p>'}</div></section>
+        <section class="panel"><div class="panel-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div>
           <div class="set-rows" id="deskSets">${all.length ? '<p class="muted">Carregando…</p>' : '<p class="muted">Os sets das suas cartas aparecem aqui.</p>'}</div></section>
-        ${recent.length ? `<section class="span-12 section"><div class="panel-head"><h2><button type="button" class="head-link" data-mine="recent">Adicionadas recentemente ›</button></h2><button type="button" data-mine="recent">Ver as últimas 100</button></div>
-          <div class="thumb-grid">${recent.map(c => `<button type="button" class="thumb-card" data-card="${esc(c.id)}"><span class="frame">${imgTag(c, 'low', c.name)}</span><b>${esc(c.name)}</b><span class="muted small">${esc(c.setName)}</span></button>`).join('')}</div></section>` : ''}
-      </div>`;
+        <section class="panel"><div class="panel-head"><h2><button type="button" class="head-link" data-mine="recent">Adicionadas recentemente ›</button></h2><button type="button" data-mine="recent">Últimas 100</button></div>
+          <div class="list">${recent.length ? recent.map(c => row(c, `<span class="muted small">${when(c.addedAt)}</span>`, c.setName)).join('') : '<p class="muted">Nada adicionado ainda.</p>'}</div></section>
+      </div>
+      <section class="panel showcase-strip"><div class="panel-head"><h2>Vitrine</h2><button type="button" data-tab="profile">Ver perfil</button></div>
+        ${show.length ? `<div class="strip">${show.map(c => `<button type="button" class="strip-card" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c, 'low', c.name)}</button>`).join('')}</div>`
+          : '<p class="muted small">Sua vitrine está vazia. Escolha suas cartas favoritas no perfil para deixá-las em destaque aqui e no seu perfil público.</p>'}</section>`;
     bindChart();
     if (!all.length) return;
     try {

@@ -9,7 +9,8 @@ let sheetCard = null;
 
 function go(next) { Object.assign(route, next); render(); window.scrollTo(0, 0); }
 function render() {
-  const active = { settings: 'profile', help: 'profile', reports: 'admin', friend: 'social' }[route.tab] || route.tab;
+  const wide = matchMedia('(min-width: 1024px)').matches;
+  const active = { settings: wide ? 'settings' : 'profile', help: wide ? 'settings' : 'profile', reports: 'admin', friend: 'social' }[route.tab] || route.tab;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === active));
   if (window.Desk?.render()) return;
   ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings, cards: renderMine,
@@ -121,14 +122,22 @@ function trackValue(total) {
   save();
 }
 const dayLabel = d => d.slice(8, 10) + '/' + d.slice(5, 7);
-function valueChart() {
-  const h = store.history || [];
+// Variação do valor no período (7, 30, 90 dias ou tudo), a partir do histórico diário.
+const historyIn = range => { const h = store.history || []; if (range === 'all') return h; const from = new Date(Date.now() - +range * 864e5).toISOString().slice(0, 10); return h.filter(p => p[0] >= from); };
+function valueChange(range = 'all') {
+  const h = historyIn(range);
+  if (h.length < 2 || !h[0][1]) return null;
+  const diff = h[h.length - 1][1] - h[0][1];
+  return { diff, pct: diff / h[0][1] * 100, label: { 7: 'em 7 dias', 30: 'em 30 dias', 90: 'em 90 dias', all: 'desde o início' }[range] };
+}
+function valueChart(range = 'all') {
+  const h = historyIn(range);
   if (h.length < 2) return '<p class="muted small">O gráfico da evolução aparece a partir do segundo dia de uso.</p>';
   const vals = h.map(p => p[1]), min = Math.min(...vals), max = Math.max(...vals), pad = (max - min) * .12 || max * .05 || 1;
   const W = 320, H = 86, x = i => i / (h.length - 1) * W, y = v => H - 6 - (v - min + pad) / (max - min + 2 * pad) * (H - 12);
   const line = h.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(' ');
   const end = h.length - 1;
-  return `<div class="chart" id="valueChart">
+  return `<div class="chart" id="valueChart" data-range="${range}">
     <div class="readout" id="chartRead"><b>${money(vals[end])}</b> em ${dayLabel(h[end][0])}</div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evolução do valor da coleção, de ${money(vals[0])} para ${money(vals[end])}">
       <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc23d" stop-opacity=".28"/><stop offset="1" stop-color="#ffc23d" stop-opacity="0"/></linearGradient></defs>
@@ -140,7 +149,7 @@ function valueChart() {
 }
 function bindChart() {
   const box = $('#valueChart'); if (!box) return;
-  const h = store.history, cursor = $('#chartCursor'), read = $('#chartRead');
+  const h = historyIn(box.dataset.range || 'all'), cursor = $('#chartCursor'), read = $('#chartRead');
   const show = e => {
     const r = box.getBoundingClientRect(), i = Math.max(0, Math.min(h.length - 1, Math.round((e.clientX - r.left) / r.width * (h.length - 1))));
     cursor.setAttribute('x1', i / (h.length - 1) * 320); cursor.setAttribute('x2', i / (h.length - 1) * 320); cursor.setAttribute('opacity', 1);
@@ -184,7 +193,7 @@ async function renderHome() {
   view.innerHTML = `
     <div class="brand-row brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></div>
     <div class="topbar"><div class="hello"><span>Olá, treinador</span><b>${esc(trainerName())}</b></div>
-      <span class="top-actions"><button class="icon-btn" type="button" data-tab="search" aria-label="Explorar cartas"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
+      <span class="top-actions"><button class="icon-btn" type="button" data-tab="settings" aria-label="Ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.700 1.700 0 0 0 .3 1.800l.1.100a2 2 0 1 1-2.800 2.800l-.1-.1a1.700 1.700 0 0 0-1.800-.3 1.700 1.700 0 0 0-1 1.500V21a2 2 0 1 1-4 0v-.1a1.700 1.700 0 0 0-1.100-1.500 1.700 1.700 0 0 0-1.800.3l-.1.1a2 2 0 1 1-2.800-2.800l.1-.1a1.700 1.700 0 0 0 .3-1.800 1.700 1.700 0 0 0-1.500-1H3a2 2 0 1 1 0-4h.1a1.700 1.700 0 0 0 1.500-1.100 1.700 1.700 0 0 0-.3-1.800l-.1-.1a2 2 0 1 1 2.800-2.800l.1.1a1.700 1.700 0 0 0 1.800.3H9a1.700 1.700 0 0 0 1-1.500V3a2 2 0 1 1 4 0v.1a1.700 1.700 0 0 0 1 1.500 1.700 1.700 0 0 0 1.800-.3l.1-.1a2 2 0 1 1 2.800 2.800l-.1.1a1.700 1.700 0 0 0-.3 1.800V9a1.700 1.700 0 0 0 1.500 1H21a2 2 0 1 1 0 4h-.1a1.700 1.700 0 0 0-1.500 1z"/></svg></button><button class="icon-btn" type="button" data-tab="search" aria-label="Explorar cartas"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
       <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil" ${ringAttrs(store.profile.ring)}>${avatar()}</button></span></div>
     <div class="hero"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
       ${cards.length ? valueChart() : ''}
@@ -802,6 +811,7 @@ document.addEventListener('click', e => {
   const d = b.dataset;
   if (d.mySets !== undefined) go({ tab: 'sets', setId: null, region: 'mine', q: '' });
   else if (d.mine) go({ tab: 'cards', mview: d.mine, setId: null });
+  else if (d.range) { route.range = d.range; render(); }
   else if (d.ptab) { route.ptab = d.ptab; renderProfile(); }
   else if (d.themeSet) { store.theme = d.themeSet; save(); applyTheme(); renderSettings(); }
   else if (d.edition && sheetCard) { sheetLang = d.edition; editionSource = ''; refreshEditionUi(); }

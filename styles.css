@@ -762,8 +762,8 @@ button.chip { cursor: pointer; }
   :root[data-theme="light"] #tabs button.on { background: linear-gradient(90deg, rgb(2 132 199 / .12), transparent 80%); }
   :root[data-theme="light"] .table td { border-bottom-color: var(--line); }
 }
-/* O logo foi feito para fundo escuro: no modo claro ele ganha uma placa escura. */
-:root[data-theme="light"] #brand .logo, :root[data-theme="light"] .brand-row .logo, :root[data-theme="light"] .gate-card .logo { background: radial-gradient(120% 120% at 50% 0%, #1b2a6b, #0b1026); border-radius: 16px; padding: 8px 12px; }
+/* Modo claro: versão do logo sem o halo escuro (tools/logo-light.js), sem placa de fundo. */
+:root[data-theme="light"] #brand .logo, :root[data-theme="light"] .brand-row .logo, :root[data-theme="light"] .gate-card .logo { content: url("icons/logo-light.webp"); }
 :root[data-theme="light"] .brand-lock .beta { background: #e6f6fd; }
 @media (min-width: 1024px) { #view > .btn.alt[data-gate] { align-self: flex-start; justify-self: start; width: auto; } }
 /* ---------- Repetidas ---------- */
@@ -780,3 +780,67 @@ button.chip { cursor: pointer; }
 .spare-pill { padding: 2px 8px; border-radius: 999px; background: var(--surface-2); }
 .dupe-value { font-size: 15px; color: var(--accent); white-space: nowrap; }
 @media (min-width: 1024px) { .dupes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------- Painel inicial do computador (versão 2) ---------- */
+.desk-gear { display: none; }
+@media (min-width: 1024px) {
+  /* Conteúdo alinhado junto da barra lateral, usando a largura da tela. */
+  #view { max-width: 1480px; margin-left: 236px; padding: 84px 32px 40px; }
+  @media (min-width: 1580px) { #view { margin-left: 236px; } }
+  .desk-gear { display: grid; width: 38px; height: 38px; margin-left: auto; }
+  .drop-hint { margin-left: 0; }
+  #deskbar { gap: 14px; }
+  #deskbar .drop-hint { margin-left: auto; }
+  #deskbar .desk-gear { margin-left: 0; }
+  .page-head .quick { display: flex; gap: 8px; }
+
+  /* Bloco da carteira: valor, variação e números à esquerda; gráfico à direita. */
+  .portfolio { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(0, 1.5fr); gap: 24px; padding: 22px 24px; border-radius: 20px;
+    background: linear-gradient(160deg, #18245a, #10173a); border: 1px solid var(--line); position: relative; overflow: hidden; }
+  .portfolio::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--foil); }
+  .pf-main { display: grid; align-content: start; gap: 6px; }
+  .pf-main .label { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .pf-main .value { font: 800 42px/1.05 var(--display); color: transparent; background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; }
+  .delta { font: 600 14px var(--mono); }
+  .delta.up { color: #3ddc97; } .delta.down { color: var(--danger); }
+  .pf-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .pf-stats button { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; text-align: left; background: rgb(255 255 255 / .05); border: 1px solid rgb(255 255 255 / .06); }
+  .pf-stats button:hover { border-color: var(--cyan); }
+  .pf-stats b { font: 800 18px var(--display); }
+  .pf-stats span { color: var(--muted); font-size: 12px; }
+  .pf-chart { display: grid; align-content: start; gap: 10px; min-width: 0; }
+  .pf-chart .seg.range { justify-self: end; width: auto; }
+  .pf-chart .seg.range button { padding: 6px 12px; flex: none; }
+  .pf-chart .chart svg { height: 170px; }
+  .pf-chart > p { align-self: center; justify-self: center; margin-top: 40px; }
+
+  /* Três colunas iguais com listas no mesmo formato. */
+  .dash3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+  #view .dash3 .panel, #view .showcase-strip { max-width: none; }
+  .list { display: grid; gap: 2px; margin: 0 -8px; }
+  .list-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 10px; text-align: left; }
+  .list-row:hover { background: var(--surface-2); }
+  .list-row .thumb { display: block; aspect-ratio: 63/88; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+  .list-row .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .list-row .thumb .noimg { font-size: 0; }
+  .list-row .grow { display: grid; min-width: 0; }
+  .list-row b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-row .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .right-val { font: 600 13px var(--mono); white-space: nowrap; }
+  .set-row { grid-template-columns: 56px minmax(0, 1fr) auto; padding: 7px 8px; }
+
+  /* Vitrine em faixa. */
+  .strip { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 12px; }
+  .strip-card { aspect-ratio: 63/88; border-radius: 8px; overflow: hidden; background: var(--surface-2); box-shadow: 0 6px 14px rgb(0 0 0 / .3); transition: transform .16s ease; }
+  .strip-card:hover { transform: translateY(-3px); }
+  .strip-card img { width: 100%; height: 100%; object-fit: cover; }
+
+  :root[data-theme="light"] .portfolio { background: linear-gradient(160deg, #ffffff, #eef2ff); }
+  :root[data-theme="light"] .pf-stats button { background: rgb(18 24 51 / .04); border-color: var(--line); }
+  :root[data-theme="light"] .delta.up { color: #0f7a52; }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .dash3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolio { grid-template-columns: 1fr; }
+  .strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
