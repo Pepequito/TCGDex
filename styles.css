@@ -690,3 +690,93 @@ button.chip { cursor: pointer; }
 .photo-item { grid-template-columns: 110px 1fr; align-items: start; }
 .photo-item img { width: 110px; aspect-ratio: 63/88; object-fit: cover; border-radius: 8px; grid-row: span 2; }
 .photo-item b, .photo-item .small { display: block; overflow-wrap: anywhere; }
+
+/* ---------- Computador: layout mais compacto ---------- */
+@media (min-width: 1024px) {
+  /* Barra lateral: logo, perfil, escanear e menu, tudo junto no topo. */
+  #tabs { grid-template-rows: none; align-content: start; gap: 2px; padding: 18px 12px 16px; }
+  #brand { order: -3; padding: 0 4px 10px; }
+  #sideUser { order: -2; grid-row: auto; display: block; padding: 0; margin: 0 0 10px; background: none; }
+  #tabs #scanBtn { order: -1; margin: 0 0 12px; }
+  #tabs .side-user { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); text-align: left; font-weight: 400; }
+  #tabs .side-user:hover { border-color: var(--cyan); background: var(--surface); }
+  #tabs .side-user .ring-avatar { padding: 2px; }
+  #tabs .side-user .avatar { width: 38px; height: 38px; }
+  #tabs .side-user .who { display: grid; min-width: 0; line-height: 1.25; }
+  #tabs .side-user b { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tabs .side-user .who span { font-size: 12px; color: var(--muted); }
+  #tabs .side-user .mono { font-family: var(--mono); color: var(--accent); }
+
+  /* Conteúdo: mais largo, com menos espaço entre as partes. */
+  #view { max-width: 1320px; padding: 84px 28px 40px; gap: 16px; }
+  @media (min-width: 1580px) { #view { margin-left: max(236px, calc(236px + (100vw - 236px - 1320px) / 2)); } }
+  .section { gap: 10px; }
+  .dash { gap: 16px; }
+  #view > .btn.alt[data-gate] { justify-self: start; width: auto; max-width: none; padding: 9px 16px; }
+  .hero { min-height: 0; padding: 20px 24px; gap: 10px 24px; }
+  .hero .value { font-size: 40px; }
+  .hero > p { align-self: center; }
+  .mini-profile { min-height: 0; align-content: start; }
+  .panel { padding: 16px 18px; }
+  .thumb-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+
+  /* Ajustes e Ajuda: painéis em duas colunas, sem a metade da tela vazia. */
+  .settings-grid { columns: 2; column-gap: 16px; }
+  #view .settings-grid > .panel { max-width: none; break-inside: avoid; margin-bottom: 16px; }
+
+  /* Perfil: botões e abas com largura confortável. */
+  .row-btns { width: min(100%, 520px); justify-self: center; }
+  .seg[aria-label="Seções do perfil"] { width: min(100%, 520px); justify-self: center; }
+  .banner { height: 160px; }
+}
+@media (max-width: 1023px) { .settings-grid { display: grid; gap: 14px; } }
+
+/* ---------- Modo claro ---------- */
+:root[data-theme="light"] {
+  --bg: #f3f5fb; --bg-2: #ffffff; --surface: #ffffff; --surface-2: #e8edf9; --line: #d6ddef;
+  --ink: #121833; --muted: #5b6889; --accent: #d97706; --on-accent: #2a1000; --cyan: #0284c7; --violet: #6d3fe0;
+  --chrome: linear-gradient(180deg, #141a3a 0%, #34416e 100%); --danger: #d33a2c; --gold: #b7791f;
+  color-scheme: light;
+}
+:root[data-theme="light"] body {
+  background: radial-gradient(70% 420px at 10% -140px, rgb(31 111 255 / .14), transparent 70%) no-repeat,
+    radial-gradient(60% 380px at 95% -120px, rgb(124 58 237 / .12), transparent 70%) no-repeat, var(--bg);
+}
+:root[data-theme="light"] #tabs { background: rgb(255 255 255 / .9); border-color: rgb(18 24 51 / .08); box-shadow: 0 10px 28px rgb(18 24 51 / .12); }
+:root[data-theme="light"] .hero { background: linear-gradient(160deg, #ffffff, #eef2ff); }
+:root[data-theme="light"] .showcase { background: linear-gradient(180deg, #ffffff, #eef2ff); }
+:root[data-theme="light"] .chip, :root[data-theme="light"] .rarity { background: rgb(18 24 51 / .06); }
+:root[data-theme="light"] .warn { color: #b45309; }
+:root[data-theme="light"] .gate-guest .warn { color: #8a4b00; background: #fff7e6; border-color: #f5d08a; }
+:root[data-theme="light"] .ok-note, :root[data-theme="light"] .pill.ok { color: #0f7a52; }
+:root[data-theme="light"] #gate, :root[data-theme="light"] #lock, :root[data-theme="light"] #moved {
+  background: radial-gradient(120% 70% at 50% 0%, #dfe7ff 0%, transparent 60%), var(--bg);
+}
+:root[data-theme="light"] #sheetBack { background: rgb(18 24 51 / .35); }
+:root[data-theme="light"] .profile-actions .icon-btn { background: rgb(255 255 255 / .75); border-color: rgb(18 24 51 / .12); }
+:root[data-theme="light"] .ghost-btn { border-color: var(--line); }
+:root[data-theme="light"] .suggestion .why { color: var(--cyan); }
+@media (min-width: 1024px) {
+  :root[data-theme="light"] #tabs { background: var(--bg-2); box-shadow: none; }
+  :root[data-theme="light"] #deskbar { background: rgb(255 255 255 / .86); border-bottom-color: var(--line); }
+  :root[data-theme="light"] #tabs button.on { background: linear-gradient(90deg, rgb(2 132 199 / .12), transparent 80%); }
+  :root[data-theme="light"] .table td { border-bottom-color: var(--line); }
+}
+/* O logo foi feito para fundo escuro: no modo claro ele ganha uma placa escura. */
+:root[data-theme="light"] #brand .logo, :root[data-theme="light"] .brand-row .logo, :root[data-theme="light"] .gate-card .logo { background: radial-gradient(120% 120% at 50% 0%, #1b2a6b, #0b1026); border-radius: 16px; padding: 8px 12px; }
+:root[data-theme="light"] .brand-lock .beta { background: #e6f6fd; }
+@media (min-width: 1024px) { #view > .btn.alt[data-gate] { align-self: flex-start; justify-self: start; width: auto; } }
+/* ---------- Repetidas ---------- */
+.dupes { display: grid; gap: 10px; }
+.dupe { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.dupe-card { position: relative; display: block; aspect-ratio: 63/88; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.dupe-card img { width: 100%; height: 100%; object-fit: cover; }
+.dupe-card .qty { position: absolute; right: 3px; top: 3px; padding: 0 5px; border-radius: 5px; background: var(--accent); color: var(--on-accent); font: 700 11px var(--mono); }
+.dupe-info { display: grid; gap: 6px; min-width: 0; }
+.dupe-info b { overflow-wrap: anywhere; }
+.dupe-info label { display: grid; gap: 4px; }
+.keep-select { padding: 8px 10px; font-size: 13px; border-radius: 10px; }
+.spare { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+.spare-pill { padding: 2px 8px; border-radius: 999px; background: var(--surface-2); }
+.dupe-value { font-size: 15px; color: var(--accent); white-space: nowrap; }
+@media (min-width: 1024px) { .dupes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -10,14 +10,15 @@ window.Desk = (() => {
     const side = $('#sideUser'), top = $('#deskAvatar');
     if (!side || !top) return;
     const total = collectionValue(), n = copiesCount();
-    side.innerHTML = `<span class="ring-avatar">${avatar()}</span><span><b>${esc(trainerName())}</b><span>${money(total)} · ${plural(n, 'carta', 'cartas')}</span></span>`;
+    side.innerHTML = `<button type="button" class="side-user" data-tab="profile" aria-label="Abrir perfil"><span class="ring-avatar" ${ringAttrs(store.profile.ring)}>${avatar()}</span>
+      <span class="who"><b>${esc(trainerName())}</b><span class="mono">${money(total)}</span><span>${plural(n, 'carta', 'cartas')}</span></span></button>`;
     top.innerHTML = avatar();
   }
   function render() {
     chrome();
     if (!wide.matches) return false;
     if (route.tab === 'home') { home(); return true; }
-    if (route.tab === 'cards') { cards(); return true; }
+    if (route.tab === 'cards' && route.mview !== 'dupes') { cards(); return true; }
     return false;
   }
 

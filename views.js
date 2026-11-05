@@ -283,6 +283,17 @@ function pocket(c, ed = 'all', has = !!store.cards[c.id]) {
 
 /* ---------- Minhas cartas (celular) ---------- */
 const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['hot', 'Valorização'], ['all', 'Todas']];
+function dupeRow(c) {
+  const keep = keptCopy(c), spare = spareCopies(c), copies = copiesOf(c);
+  return `<article class="dupe">
+    <button type="button" class="dupe-card" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c, 'low', c.name)}<span class="qty">×${qtyOf(c)}</span></button>
+    <div class="dupe-info"><b>${esc(c.name)}</b><span class="muted small">${esc(c.setName)} · nº ${esc(c.localId)}</span>
+      <label class="small muted">Fica na coleção
+        <select class="field keep-select" data-keep="${esc(c.id)}"><option value="">Automático: ${esc(keep.label)} (${money(keep.unit)})</option>
+          ${copies.map(x => `<option value="${esc(x.key)}"${c.keep === x.key ? ' selected' : ''}>${esc(x.label)} (${money(x.unit)})</option>`).join('')}</select></label>
+      <span class="spare">Repetidas: ${spare.map(x => `<span class="spare-pill">${x.n}× ${esc(x.label)} <span class="muted">${money(x.unit)}</span></span>`).join(' ')}</span></div>
+    <b class="dupe-value num">${money(spareValue(c))}</b></article>`;
+}
 const addedDay = t => {
   const d = new Date(t), today = new Date(), y = new Date(Date.now() - 864e5), same = (a, b) => a.toDateString() === b.toDateString();
   return same(d, today) ? 'Hoje' : same(d, y) ? 'Ontem' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
@@ -298,10 +309,11 @@ function renderMine() {
     for (const c of last) { const k = addedDay(c.addedAt); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
     body = `<p class="muted small">As ${last.length} últimas cartas adicionadas.</p>${[...groups].map(([k, g]) => `<div class="section"><h2 class="day">${esc(k)} <span class="muted small">${plural(g.length, 'carta', 'cartas')}</span></h2>${grid(g)}</div>`).join('')}`;
   } else if (tab === 'dupes') {
-    const d = cards.filter(c => qtyOf(c) > 1).sort((a, b) => qtyOf(b) - qtyOf(a) || valueOf(b) - valueOf(a));
-    const extra = d.reduce((s, c) => s + qtyOf(c) - 1, 0), extraValue = d.reduce((s, c) => s + valueOf(c) / qtyOf(c) * (qtyOf(c) - 1), 0);
-    body = d.length ? `<div class="stat-grid"><div class="stat"><b>${d.length}</b><span>Cartas repetidas</span></div><div class="stat"><b>${extra}</b><span>Cópias sobrando</span></div><div class="stat"><b>${money(extraValue)}</b><span>Valor das cópias extras</span></div></div>
-      <p class="muted small">O número em cada carta é o total de cópias, somando as edições e as graduadas.</p>${grid(d)}`
+    const d = cards.filter(c => qtyOf(c) > 1).sort((a, b) => spareValue(b) - spareValue(a));
+    const extra = d.reduce((s, c) => s + qtyOf(c) - 1, 0), extraValue = d.reduce((s, c) => s + spareValue(c), 0);
+    body = d.length ? `<div class="stat-grid"><div class="stat"><b>${d.length}</b><span>Cartas com repetidas</span></div><div class="stat"><b>${extra}</b><span>Cópias sobrando</span></div><div class="stat"><b>${money(extraValue)}</b><span>Valor das repetidas</span></div></div>
+      <p class="muted small">De cada carta, fica na coleção a cópia mais valiosa; as de menor valor contam como repetidas. Se preferir guardar outra, escolha em "Fica na coleção".</p>
+      <div class="dupes">${d.map(dupeRow).join('')}</div>`
       : '<div class="empty"><h2>Nenhuma repetida</h2><p class="muted">Quando você tiver mais de uma cópia da mesma carta, ela aparece aqui.</p></div>';
   } else if (tab === 'hot') {
     const h = cards.map(c => [c, potential(c)]).filter(([, p]) => p?.high).sort((a, b) => b[1].score - a[1].score || valueOf(b[0]) - valueOf(a[0])).map(([c]) => c);
@@ -579,7 +591,11 @@ async function squarePhoto(file) {
 function renderSettings() {
   const when = store.pricedAt ? new Date(store.pricedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'ainda não feita';
   view.innerHTML = `<button class="back" type="button" data-tab="profile">‹ Perfil</button><h1>Ajustes</h1>
+    <div class="settings-grid">
     <div class="panel section" id="account"></div>
+    <div class="panel"><h2>Aparência</h2>
+      <div class="seg" role="group" aria-label="Tema">${[['auto', 'Automático'], ['dark', 'Escuro'], ['light', 'Claro']].map(([k, l]) => `<button type="button" data-theme-set="${k}" class="${(store.theme || 'auto') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <p class="muted small">O modo escuro gasta menos bateria em telas OLED, como as da maioria dos iPhones recentes. No automático, o app segue o tema do aparelho.</p></div>
     ${window.Social?.ownBlock() || ''}
     <div class="panel"><h2>Ajuda</h2>
       <button class="btn alt" type="button" data-tab="help">Perguntas frequentes e reportar problema</button>
@@ -605,6 +621,7 @@ function renderSettings() {
       <button id="exportBtn" class="btn alt" type="button">Exportar coleção</button>
       <button id="importBtn" class="btn alt" type="button">Importar backup</button>
       <p class="muted small">Sem conta, a coleção fica só neste iPhone. Exporte de vez em quando e guarde o arquivo no iCloud Drive.</p></div>
+    </div>
     <p class="muted small">Boosterz está em versão beta. Dados de cartas: TCGdex. Reconhecimento feito no próprio aparelho. Projeto pessoal, sem vínculo com The Pokémon Company ou Nintendo.</p>`;
   window.Sync?.paint();
 }
@@ -786,6 +803,7 @@ document.addEventListener('click', e => {
   if (d.mySets !== undefined) go({ tab: 'sets', setId: null, region: 'mine', q: '' });
   else if (d.mine) go({ tab: 'cards', mview: d.mine, setId: null });
   else if (d.ptab) { route.ptab = d.ptab; renderProfile(); }
+  else if (d.themeSet) { store.theme = d.themeSet; save(); applyTheme(); renderSettings(); }
   else if (d.edition && sheetCard) { sheetLang = d.edition; editionSource = ''; refreshEditionUi(); }
   else if (d.setEd) { route.setEd = d.setEd; renderSet(); }
   else if (d.editionDefault) { store.edition = d.editionDefault; save(); renderSettings(); }
@@ -837,6 +855,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('submit', e => { if (e.target.id === 'exploreForm') { e.preventDefault(); $('#exploreQ').blur(); } });
 document.addEventListener('change', async e => {
+  if (e.target.dataset?.keep) { setKeep(e.target.dataset.keep, e.target.value); renderMine(); return; }
   if (e.target.id === 'ptFactor') { store.ptFactor = +e.target.value; save(); toast('Valor das cartas brasileiras atualizado'); }
   if (e.target.id === 'mPhoto' && e.target.files[0]) $('#mPhotoLabel').textContent = 'Foto escolhida';
   if (e.target.id === 'pPhoto' && e.target.files[0]) {

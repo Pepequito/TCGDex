@@ -17,6 +17,17 @@ function save() {
 }
 navigator.storage?.persist?.();
 
+/* ---------- Tema claro e escuro ---------- */
+// O modo escuro economiza bateria em telas OLED; "auto" acompanha o aparelho.
+const darkQuery = matchMedia('(prefers-color-scheme: light)');
+function applyTheme() {
+  const t = store.theme || 'auto', light = t === 'light' || (t === 'auto' && darkQuery.matches);
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', light ? '#f3f5fb' : '#080c1b');
+}
+darkQuery.addEventListener?.('change', applyTheme);
+applyTheme();
+
 /* ---------- API ---------- */
 const memo = new Map();
 async function getJSON(url) {
@@ -241,6 +252,32 @@ function migrateEditions() {
   return ids;
 }
 window.migrateEditions = migrateEditions;
+/* ---------- Cópias e repetidas ---------- */
+// Cada tipo de cópia de uma carta: variante e edição (normal, holo, reverse; brasileira ou inglesa) ou uma graduada.
+function copiesOf(c) {
+  const list_ = Object.entries(c.qty || {}).filter(([, n]) => n > 0).map(([key, n]) => ({
+    key, n, unit: unitUsd(c, key),
+    label: (VARIANTS[variantOfKey(key)]?.label || variantOfKey(key)) + (hasEditions(c) ? (isPtKey(key) ? ' · BR' : ' · EN') : ''),
+  }));
+  for (const g of c.graded || []) list_.push({ key: 'g:' + g.gid, n: 1, unit: gradedUsd(c, g), label: gradeLabel(g), graded: true });
+  return list_;
+}
+// A cópia que fica na coleção: a escolhida pela pessoa ou, no automático, a de maior valor. As outras são repetidas.
+function keptCopy(c) {
+  const copies = copiesOf(c);
+  return copies.find(x => x.key === c.keep) || [...copies].sort((x, y) => y.unit - x.unit || (y.graded ? 1 : 0) - (x.graded ? 1 : 0))[0];
+}
+function spareCopies(c) {
+  const keep = keptCopy(c);
+  return copiesOf(c).map(x => ({ ...x, n: x.n - (x.key === keep?.key ? 1 : 0) })).filter(x => x.n > 0);
+}
+const spareValue = c => spareCopies(c).reduce((s, x) => s + x.n * x.unit, 0);
+function setKeep(id, key) {
+  const c = store.cards[id]; if (!c) return;
+  if (key) c.keep = key; else delete c.keep;
+  c.updatedAt = Date.now(); save(); window.Sync?.changed(id);
+}
+
 /* ---------- Potencial de valorização ---------- */
 // Indicador automático, não recomendação de investimento. Soma sinais que costumam acompanhar cartas que valorizam:
 // preço subindo (média de 7 dias acima da de 30 na Cardmarket), raridade de alta demanda, Pokémon muito procurado
