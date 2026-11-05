@@ -1,6 +1,9 @@
 'use strict';
 // Conta e nuvem. A coleção continua em `store`; o Firestore guarda uma cópia por usuário
 // em users/{uid}/cards/{cardId}. Sem configuração ou sem login, o app funciona só no aparelho.
+// Para gastar poucas leituras, a coleção inteira é lida uma vez por aparelho; depois o app só escuta
+// o que mudou desde a última vez (campo syncAt, com a hora do servidor). Carta removida vira "lápide"
+// ({ deleted: true }) em vez de sumir, para os outros aparelhos ficarem sabendo.
 window.Sync = (() => {
   const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
   const config = window.FICHARIO_FIREBASE;
@@ -24,6 +27,11 @@ window.Sync = (() => {
   const explain = e => ERRORS[e?.code] || `Não consegui concluir (${e?.code || 'erro desconhecido'}).`;
   const cardsRef = () => db.collection('users').doc(user.uid).collection('cards');
   const clean = c => JSON.parse(JSON.stringify(c));
+  const now = () => firebase.firestore.FieldValue.serverTimestamp();
+  const stamp = o => ({ ...clean(o), syncAt: now() });
+  const strip = d => { const { syncAt, ...rest } = d; return rest; };
+  const millis = d => d.syncAt?.toMillis?.() || 0;
+  let retry = null;
 
   function loadScript(src) {
     return new Promise((ok, fail) => {
@@ -48,18 +56,37 @@ window.Sync = (() => {
     } catch { booted = false; status = 'Sem conexão com a conta'; paint(); }
   }
   function onUser(next) {
-    unsub?.(); unsub = null;
+    unsub?.(); unsub = null; clearTimeout(retry);
     user = next; reconciled = false; notice = '';
-    if (user) {
-      status = 'Sincronizando…';
-      unsub = cardsRef().onSnapshot({ includeMetadataChanges: true }, onSnapshot, () => { status = 'Erro ao sincronizar. Confira as regras do Firestore.'; paint(); });
-    }
+    if (user) { status = 'Sincronizando…'; start(); }
     window.Social?.onUser(user);
     if (user) { store.gate = 'account'; save(); hideGate(); }
     paint(); render();
   }
+  // Primeira vez deste usuário neste aparelho: lê tudo do servidor e junta com o que já existe aqui.
+  async function start() {
+    const uid = user.uid;
+    if (store.syncUid !== uid) {
+      try {
+        const snap = await cardsRef().get({ source: 'server' });
+        if (user?.uid !== uid) return;
+        reconcile(snap);
+        store.syncUid = uid;
+        store.syncedAt = Math.max(0, ...snap.docs.map(d => millis(d.data())));
+        save(); render();
+      } catch {
+        status = 'Sem conexão com a nuvem. Tento de novo em instantes.'; paint();
+        retry = setTimeout(() => user?.uid === uid && start(), 30000);
+        return;
+      }
+    }
+    reconciled = true;
+    const since = firebase.firestore.Timestamp.fromMillis(store.syncedAt || 0);
+    unsub = cardsRef().where('syncAt', '>', since).onSnapshot({ includeMetadataChanges: true }, onSnapshot,
+      () => { status = 'Erro ao sincronizar. Confira as regras do Firestore.'; paint(); });
+  }
   function reconcile(snap) {
-    const remote = new Map(snap.docs.map(d => [d.id, d.data()]));
+    const remote = new Map(snap.docs.map(d => [d.id, strip(d.data())]));
     const profile = remote.get(PROFILE);
     remote.delete(PROFILE);
     if (profile && (profile.updatedAt || 0) > (store.profile.updatedAt || 0)) store.profile = profile;
@@ -69,8 +96,10 @@ window.Sync = (() => {
     for (const [id, r] of remote) {
       const l = store.cards[id];
       if (l && (l.updatedAt || 0) > (r.updatedAt || 0)) toSend.push(id);
+      else if (r.deleted) delete store.cards[id];
       else store.cards[id] = { ...r, prices: l?.prices || r.prices };
     }
+    store.synced = [...remote].filter(([, r]) => !r.deleted).map(([id]) => id);
     for (const id of Object.keys(store.cards)) {
       if (remote.has(id)) continue;
       // Já esteve na nuvem e sumiu: foi removida em outro aparelho. Senão, é carta nova daqui.
@@ -79,32 +108,31 @@ window.Sync = (() => {
     }
     return send(toSend);
   }
-  const sendProfile = () => cardsRef().doc(PROFILE).set(clean(store.profile)).catch(() => { status = 'Erro ao salvar na nuvem'; paint(); });
+  const sendProfile = () => cardsRef().doc(PROFILE).set(stamp(store.profile)).catch(() => { status = 'Erro ao salvar na nuvem'; paint(); });
   async function send(ids) {
     for (let i = 0; i < ids.length; i += 400) {
       const batch = db.batch();
       for (const id of ids.slice(i, i + 400)) {
         const c = store.cards[id], ref = cardsRef().doc(id);
-        c ? batch.set(ref, clean(c)) : batch.delete(ref);
+        batch.set(ref, c ? stamp(c) : { id, deleted: true, updatedAt: Date.now(), syncAt: now() });
       }
       batch.commit().catch(() => { status = 'Erro ao salvar na nuvem'; paint(); });
     }
   }
+  // Só chegam documentos alterados depois de syncedAt (de outro aparelho ou a confirmação do que este enviou).
   function onSnapshot(snap) {
     const { fromCache, hasPendingWrites } = snap.metadata;
     let changed = false;
-    if (!reconciled && !fromCache) { reconciled = true; changed = true; reconcile(snap); }
-    else if (reconciled) {
-      for (const ch of snap.docChanges()) {
-        if (ch.doc.metadata.hasPendingWrites) continue;
-        const id = ch.doc.id, l = store.cards[id];
-        if (id === PROFILE) { if (ch.type !== 'removed') store.profile = ch.doc.data(); changed = true; continue; }
-        if (ch.type === 'removed') delete store.cards[id];
-        else store.cards[id] = { ...ch.doc.data(), prices: l?.prices || ch.doc.data().prices };
-        changed = true;
-      }
+    for (const ch of snap.docChanges()) {
+      if (ch.doc.metadata.hasPendingWrites || ch.type === 'removed') continue;
+      const id = ch.doc.id, raw = ch.doc.data(), d = strip(raw), l = store.cards[id];
+      if (!fromCache) store.syncedAt = Math.max(store.syncedAt || 0, millis(raw));
+      if (id === PROFILE) { if ((d.updatedAt || 0) >= (store.profile.updatedAt || 0)) { store.profile = d; changed = true; } continue; }
+      if (l && (l.updatedAt || 0) > (d.updatedAt || 0)) continue;
+      if (d.deleted) { if (l) { delete store.cards[id]; changed = true; } continue; }
+      store.cards[id] = { ...d, prices: l?.prices || d.prices };
+      changed = true;
     }
-    if (!fromCache) store.synced = snap.docs.map(d => d.id).filter(id => id !== PROFILE);
     // Cartas antigas vindas da nuvem também passam para a edição brasileira.
     if (window.migrateEditions?.().length) changed = true;
     status = hasPendingWrites ? 'Salvando na nuvem…' : fromCache ? 'Sem internet. As mudanças sobem depois.' : 'Tudo salvo na nuvem';
@@ -186,7 +214,7 @@ window.Sync = (() => {
     const b = e.target.closest('[data-sync]'); if (!b || !auth) return;
     const kind = b.dataset.sync;
     if (kind === 'google') act(google);
-    else if (kind === 'out') act(async () => { store.synced = []; store.gate = null; save(); await auth.signOut(); go({ tab: 'home', setId: null }); showGate(); });
+    else if (kind === 'out') act(async () => { store.synced = []; store.syncUid = null; store.syncedAt = 0; store.gate = null; save(); await auth.signOut(); go({ tab: 'home', setId: null }); showGate(); });
     else if (kind === 'create') {
       const [mail, pass] = creds();
       act(() => auth.createUserWithEmailAndPassword(mail, pass));
