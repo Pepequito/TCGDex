@@ -12,7 +12,7 @@ function render() {
   const active = { settings: 'profile', help: 'profile', reports: 'profile', friend: 'social' }[route.tab] || route.tab;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === active));
   if (window.Desk?.render()) return;
-  ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings,
+  ({ home: renderHome, sets: route.setId ? renderSet : renderSets, search: renderSearch, profile: renderProfile, settings: renderSettings, cards: renderMine,
     social: () => window.Social?.renderSocial(), friend: () => window.Social?.renderFriend(),
     help: () => window.Help?.renderHelp(), reports: () => window.Help?.renderReports() })[route.tab]?.();
 }
@@ -150,7 +150,7 @@ function bindChart() {
   box.addEventListener('pointerdown', show);
 }
 function railCard(c, label) {
-  return `<button class="rail-card" type="button" data-card="${esc(c.id)}"><span class="frame">${imgTag(c, 'low', c.name)}</span>
+  return `<button class="rail-card" type="button" data-card="${esc(c.id)}"><span class="frame">${imgTag(c, 'low', c.name)}${hotBadge(c)}</span>
     <b>${esc(c.name)}</b>${label ? `<span class="price">${label}</span>` : ''}</button>`;
 }
 // Sem logo oficial, vale o símbolo do set; sem símbolo, o código impresso nas cartas ou as iniciais.
@@ -188,12 +188,12 @@ async function renderHome() {
       <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil" ${ringAttrs(store.profile.ring)}>${avatar()}</button></span></div>
     <div class="hero"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
       ${cards.length ? valueChart() : ''}
-      <div class="chips"><span class="chip"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'}</span><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div></div>
+      <div class="chips"><button type="button" class="chip" data-mine="all"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'} ›</button><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div></div>
     ${window.Sync?.nudge() || ''}
     ${cards.length ? `
     <div class="section"><div class="section-head"><h2>Mais valiosas</h2></div><div class="rail">${top.map(c => railCard(c, money(valueOf(c)))).join('')}</div></div>
     <div class="section"><div class="section-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div><div class="tiles" id="mySets"></div></div>
-    <div class="section"><div class="section-head"><h2>Adicionadas recentemente</h2></div><div class="rail">${recent.map(c => railCard(c)).join('')}</div></div>`
+    <div class="section"><div class="section-head"><h2><button type="button" class="head-link" data-mine="recent">Adicionadas recentemente ›</button></h2><button type="button" data-mine="dupes">Repetidas</button></div><div class="rail">${recent.map(c => railCard(c)).join('')}</div></div>`
     : `<div class="empty"><h2>Sua coleção está vazia</h2>
        <p class="muted">Aponte a câmera para a primeira carta. O app reconhece a arte e você confirma antes de adicionar.</p>
        <button class="btn" type="button" data-scan>Escanear a primeira carta</button></div>`}`;
@@ -278,7 +278,38 @@ function pocket(c, ed = 'all', has = !!store.cards[c.id]) {
   const own = store.cards[c.id], star = store.profile.showcase.includes(c.id), slab = own?.graded?.[0];
   const n = !own ? 0 : ed === 'all' ? qtyOf(own) : qtyIn(own, ed);
   return `<button type="button" class="pocket${has ? '' : ' missing'}" data-card="${esc(c.id)}" aria-label="${esc(c.name)} ${esc(c.localId)}${has ? '' : ', faltando'}">
-    ${imgTag(ed === 'all' ? c : artFor(c, ed))}<span class="tag">${esc(c.localId)}</span>${n > 1 ? `<span class="qty">×${n}</span>` : ''}${star ? '<span class="star" aria-hidden="true">★</span>' : ''}${slab ? `<span class="slab-tag">${esc(gradeLabel(slab))}</span>` : ''}</button>`;
+    ${imgTag(ed === 'all' ? c : artFor(c, ed))}<span class="tag">${esc(c.localId)}</span>${n > 1 ? `<span class="qty">×${n}</span>` : ''}${star ? '<span class="star" aria-hidden="true">★</span>' : ''}${own ? hotBadge(own) : ''}${slab ? `<span class="slab-tag">${esc(gradeLabel(slab))}</span>` : ''}</button>`;
+}
+
+/* ---------- Minhas cartas (celular) ---------- */
+const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['hot', 'Valorização'], ['all', 'Todas']];
+const addedDay = t => {
+  const d = new Date(t), today = new Date(), y = new Date(Date.now() - 864e5), same = (a, b) => a.toDateString() === b.toDateString();
+  return same(d, today) ? 'Hoje' : same(d, y) ? 'Ontem' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+};
+function renderMine() {
+  const tab = route.mview || 'recent', cards = list();
+  const seg = `<div class="seg" role="tablist" aria-label="Minhas cartas">${MINE_TABS.map(([k, l]) => `<button type="button" role="tab" data-mine="${k}" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const grid = list_ => `<div class="binder">${list_.map(c => pocket(c)).join('')}</div>`;
+  let body;
+  if (!cards.length) body = '<div class="empty"><h2>Nenhuma carta ainda</h2><p class="muted">Escaneie ou busque cartas para começar.</p><button class="btn" type="button" data-scan>Escanear carta</button></div>';
+  else if (tab === 'recent') {
+    const last = [...cards].sort((a, b) => b.addedAt - a.addedAt).slice(0, 100), groups = new Map();
+    for (const c of last) { const k = addedDay(c.addedAt); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
+    body = `<p class="muted small">As ${last.length} últimas cartas adicionadas.</p>${[...groups].map(([k, g]) => `<div class="section"><h2 class="day">${esc(k)} <span class="muted small">${plural(g.length, 'carta', 'cartas')}</span></h2>${grid(g)}</div>`).join('')}`;
+  } else if (tab === 'dupes') {
+    const d = cards.filter(c => qtyOf(c) > 1).sort((a, b) => qtyOf(b) - qtyOf(a) || valueOf(b) - valueOf(a));
+    const extra = d.reduce((s, c) => s + qtyOf(c) - 1, 0), extraValue = d.reduce((s, c) => s + valueOf(c) / qtyOf(c) * (qtyOf(c) - 1), 0);
+    body = d.length ? `<div class="stat-grid"><div class="stat"><b>${d.length}</b><span>Cartas repetidas</span></div><div class="stat"><b>${extra}</b><span>Cópias sobrando</span></div><div class="stat"><b>${money(extraValue)}</b><span>Valor das cópias extras</span></div></div>
+      <p class="muted small">O número em cada carta é o total de cópias, somando as edições e as graduadas.</p>${grid(d)}`
+      : '<div class="empty"><h2>Nenhuma repetida</h2><p class="muted">Quando você tiver mais de uma cópia da mesma carta, ela aparece aqui.</p></div>';
+  } else if (tab === 'hot') {
+    const h = cards.map(c => [c, potential(c)]).filter(([, p]) => p?.high).sort((a, b) => b[1].score - a[1].score || valueOf(b[0]) - valueOf(a[0])).map(([c]) => c);
+    body = `<p class="muted small">Cartas com sinais de valorização: preço subindo, raridade de alta demanda, Pokémon procurado e set mais antigo. Toque numa carta para ver os motivos. Indicador automático, não é recomendação de investimento.</p>
+      ${h.length ? grid(h) : '<div class="empty"><h2>Nenhuma por enquanto</h2><p class="muted">Os sinais de preço chegam com a atualização diária dos preços.</p></div>'}`;
+  } else body = grid([...cards].sort((a, b) => valueOf(b) - valueOf(a)));
+  view.innerHTML = `<button class="back" type="button" data-tab="home">‹ Coleção</button>
+    <div class="page-head"><div><h1>Minhas cartas</h1><span class="muted">${plural(copiesCount(), 'carta', 'cartas')} · ${money(collectionValue())}</span></div></div>${seg}${body}`;
 }
 
 /* ---------- Busca ---------- */
@@ -400,14 +431,27 @@ function showcaseBlock() {
 // Descobre o Pokémon de cada carta pelo nome (Charizard ex, Mega Lucario, リザードン, 噴火龍…) com data/species.json.
 const getSpecies = () => once('species', async () => {
   const rows = await getJSON('data/species.json');
-  const latin = new Map(), other = [];
+  const latin = new Map(), other = [], byDex = new Map();
   for (const [dex, en, ...alt] of rows) {
-    latin.set(norm(en), [dex, en]);
+    latin.set(norm(en), [dex, en]); byDex.set(dex, en);
     for (const a of alt) if (a.length > 1) other.push([a, dex, en]);
   }
   other.sort((a, b) => b[0].length - a[0].length);
-  return { latin, other, total: rows.length };
+  return { latin, other, byDex, total: rows.length };
 });
+// Resumo do gosto da coleção, publicado no perfil público para a aba Comunidade: Pokémon e sets mais presentes.
+async function tasteOf() {
+  const sp = await getSpecies().catch(() => null), species = new Map(), sets = new Map();
+  for (const c of list()) {
+    const n = qtyOf(c);
+    if (c.setId !== 'custom') sets.set(c.setId, (sets.get(c.setId) || 0) + n);
+    const hit = sp && (speciesOf(c.nameEn || c.name, sp) || speciesOf(c.name, sp));
+    if (hit) species.set(hit[0], (species.get(hit[0]) || 0) + n);
+  }
+  const top = (m, k) => [...m].sort((a, b) => b[1] - a[1]).slice(0, k).map(x => x[0]);
+  return { favs: top(species, 15), sets: top(sets, 15) };
+}
+const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ');
 function speciesOf(name, sp) {
   const words = norm(name).split(' ');
   for (let n = 3; n >= 1; n--) for (let i = 0; i + n <= words.length; i++) {
@@ -518,6 +562,9 @@ function editProfile() {
       ${p.photo ? '<button class="btn alt" type="button" data-photo-off>Remover foto</button>' : ''}
       <input id="pName" class="field" maxlength="30" placeholder="Seu nome de treinador" aria-label="Nome" value="${esc(p.name || accountUser()?.name || '')}" autocomplete="off">
       <textarea id="pBio" class="field" maxlength="120" placeholder="Uma frase sobre sua coleção" aria-label="Sobre você">${esc(p.bio || '')}</textarea>
+      <div class="two"><input id="pCity" class="field" maxlength="40" placeholder="Cidade (opcional)" aria-label="Cidade" value="${esc(p.city || '')}" autocomplete="address-level2">
+        <select id="pState" class="field" aria-label="Estado"><option value="">Estado</option>${UFS.map(u => `<option${p.state === u ? ' selected' : ''}>${u}</option>`).join('')}</select></div>
+      <p class="muted small">Cidade e estado são opcionais e aparecem no seu perfil público. Servem para a aba Comunidade sugerir colecionadores perto de você.</p>
       <button class="btn" type="submit">Salvar perfil</button></form>`);
 }
 let pendingPhoto;
@@ -581,6 +628,13 @@ async function setNameLanguage(en) {
 }
 
 /* ---------- Painel da carta ---------- */
+function potentialBlock(card) {
+  const pot = potential({ ...card, ...(store.cards[card.id] || {}), prices: card.prices || store.cards[card.id]?.prices });
+  if (!pot?.why.length) return '';
+  return `<details class="potential${pot.high ? ' high' : ''}"${pot.high ? ' open' : ''}><summary>${pot.high ? '📈 Alto potencial de valorização' : 'Potencial de valorização: ' + (pot.score >= 2 ? 'médio' : 'baixo')}</summary>
+    <ul>${pot.why.map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+    <p class="muted small">Indicador automático com base em preço, raridade e procura. Não é recomendação de investimento.</p></details>`;
+}
 function cardExtras(card) {
   const own = store.cards[card.id], on = store.profile.showcase.includes(card.id);
   const liga = `<a class="btn alt" href="${esc(ligaUrl(card))}" target="_blank" rel="noopener">Ver na Liga Pokémon</a>`;
@@ -699,7 +753,7 @@ async function showCard(id) {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${gradedBlock(sheetCard)}${cardExtras(sheetCard)}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
+    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
 
@@ -730,6 +784,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const d = b.dataset;
   if (d.mySets !== undefined) go({ tab: 'sets', setId: null, region: 'mine', q: '' });
+  else if (d.mine) go({ tab: 'cards', mview: d.mine, setId: null });
   else if (d.ptab) { route.ptab = d.ptab; renderProfile(); }
   else if (d.edition && sheetCard) { sheetLang = d.edition; editionSource = ''; refreshEditionUi(); }
   else if (d.setEd) { route.setEd = d.setEd; renderSet(); }
@@ -795,6 +850,8 @@ document.addEventListener('submit', e => {
   const p = store.profile;
   p.name = $('#pName').value.trim();
   p.bio = $('#pBio').value.trim();
+  p.city = $('#pCity').value.trim();
+  p.state = $('#pState').value;
   if (pendingPhoto === null) delete p.photo;
   else if (pendingPhoto) p.photo = pendingPhoto;
   saveProfile();

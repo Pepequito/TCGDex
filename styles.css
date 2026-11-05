@@ -639,3 +639,20 @@ body.gated #tabs { display: none; }
 .set-hero img[src*="icons/sets/ja/"], .set-hero img[src*="icons/sets/zh/"] { max-height: 140px; }
 .edition-note { color: var(--cyan); }
 .controls .seg[aria-label="Edição"] { flex: 1 1 100%; }
+/* ---------- Minhas cartas e valorização ---------- */
+.hot { position: absolute; left: 4px; top: 4px; z-index: 2; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgb(8 12 24 / .82); box-shadow: 0 0 0 1px rgb(61 220 151 / .6); font-size: 12px; line-height: 1; }
+.rail-card .frame { position: relative; }
+.cell-card .hot { position: static; display: inline-grid; margin-left: 6px; width: 20px; height: 20px; }
+.head-link { font: inherit; color: inherit; text-align: left; }
+button.chip { cursor: pointer; }
+.section h2.day { display: flex; align-items: baseline; gap: 8px; font-size: 16px; }
+.potential { padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.potential.high { border-color: rgb(61 220 151 / .5); background: rgb(61 220 151 / .07); }
+.potential summary { cursor: pointer; font-weight: 600; }
+.potential ul { margin: 8px 0 6px 18px; display: grid; gap: 4px; }
+.mine-views { margin-bottom: 10px; max-width: 560px; }
+.feed-col { display: grid; gap: 12px; align-content: start; }
+.suggest { display: grid; gap: 8px; }
+.suggestion .why { display: block; margin-top: 2px; color: var(--cyan); }
+.suggestion .person-main .avatar { width: 40px; height: 40px; }
+.feed h2 { font-size: 17px; margin-top: 6px; }

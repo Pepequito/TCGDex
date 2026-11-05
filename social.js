@@ -40,10 +40,11 @@ window.Social = (() => {
     loaded = true;
     if (['profile', 'settings', 'social'].includes(route.tab)) render();
   }
-  function publicDoc() {
+  async function publicDoc() {
     const u = window.Sync?.user?.() || {};
-    const p = store.profile;
+    const p = store.profile, taste = await tasteOf().catch(() => ({ favs: [], sets: [] }));
     return {
+      city: p.city || '', state: p.state || '', favs: taste.favs, sets: taste.sets,
       uid: me.uid, username: mine.username, name: trainerName(), bio: p.bio || '',
       photo: p.photo || u.photo || '', privacy: mine.privacy || 'public', showValue: !!mine.showValue,
       value: mine.showValue ? Math.round(collectionValue() * 100) / 100 : null,
@@ -55,7 +56,7 @@ window.Social = (() => {
   }
   async function publish() {
     if (!me || !mine?.username || !db()) return;
-    try { await db().collection('profiles').doc(me.uid).set(publicDoc()); }
+    try { await db().collection('profiles').doc(me.uid).set(await publicDoc()); }
     catch (e) { blocked = denied(e); }
   }
   function publishSoon() { clearTimeout(timer); timer = setTimeout(publish, 3000); }
@@ -64,6 +65,7 @@ window.Social = (() => {
     const err = nameError(name);
     if (err) return err;
     const ref = db().collection('usernames').doc(name), prof = db().collection('profiles').doc(me.uid);
+    const draft = await publicDoc();
     try {
       await db().runTransaction(async tx => {
         const taken = await tx.get(ref);
@@ -71,7 +73,7 @@ window.Social = (() => {
         if (mine?.username && mine.username !== name) tx.delete(db().collection('usernames').doc(mine.username));
         if (!taken.exists) tx.set(ref, { uid: me.uid });
         mine = { ...(mine || { privacy: 'public', showValue: false }), username: name };
-        tx.set(prof, publicDoc());
+        tx.set(prof, { ...draft, uid: me.uid, username: name, privacy: mine.privacy || 'public', showValue: !!mine.showValue });
       });
       return '';
     } catch (e) {
@@ -162,7 +164,8 @@ window.Social = (() => {
           <input id="peopleQ" class="field" type="search" placeholder="Procurar pessoas por @usuário" aria-label="Procurar pessoas" autocomplete="off" autocapitalize="none">
           <div id="peopleOut" class="people"></div></div>
         <details class="panel" id="followingBox"><summary><b>Quem você segue</b></summary><div id="followingOut" class="people"><p class="muted small">Carregando…</p></div></details>
-      </div><div class="feed" id="feed"><p class="muted">Carregando o feed…</p></div></div>`;
+      </div><div class="feed-col"><div class="seg" role="tablist" aria-label="Feed">${[['friends', 'Amigos'], ['community', 'Comunidade']].map(([k, l]) => `<button type="button" role="tab" data-stab="${k}" aria-selected="${(route.stab || 'friends') === k}" class="${(route.stab || 'friends') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="feed" id="feed"><p class="muted">Carregando…</p></div></div></div>`;
     loadFeed();
   }
   async function loadFeed() {
@@ -176,7 +179,9 @@ window.Social = (() => {
       const out = $('#followingOut');
       if (out) out.innerHTML = following.size ? following.docs.map(d => personRow(d.data().username, d.id, true)).join('')
         : '<p class="muted small">Você ainda não segue ninguém.</p>';
-      const uids = [me.uid, ...following.docs.map(d => d.id)].slice(0, 40);
+      if ((route.stab || 'friends') === 'community') return loadCommunity(new Set(following.docs.map(d => d.id)));
+      // Amigos: só o que as pessoas que você segue adicionaram.
+      const uids = following.docs.map(d => d.id).slice(0, 40);
       const lists = await Promise.all(uids.map(async uid => {
         try {
           const [acts, prof] = await Promise.all([
@@ -201,12 +206,56 @@ window.Social = (() => {
       const box = $('#feed'); if (box) box.innerHTML = '<p class="muted">Não consegui carregar o feed. Verifique a conexão.</p>';
     }
   }
+  async function withCounts(list_) {
+    await Promise.all(list_.map(async a => {
+      try {
+        const [likes, comments] = await Promise.all([actRef(a).collection('likes').get(), actRef(a).collection('comments').get()]);
+        a.likes = likes.size; a.liked = likes.docs.some(d => d.id === me.uid); a.comments = comments.size;
+      } catch { a.likes = a.comments = 0; }
+    }));
+    return list_;
+  }
+  // Comunidade: perfis públicos ordenados pelo que têm em comum com você (Pokémon, sets e lugar)
+  // e o que as pessoas mais parecidas com você adicionaram por último.
+  async function loadCommunity(following) {
+    const box = $('#feed'); if (!box) return;
+    try {
+      const [snap, mineT, sp] = await Promise.all([
+        db().collection('profiles').where('privacy', 'in', ['public', 'showcase']).limit(300).get(),
+        tasteOf(), getSpecies().catch(() => null),
+      ]);
+      const p = store.profile, same = (x, y) => x && y && norm(x) === norm(y);
+      const ranked = snap.docs.map(d => d.data()).filter(x => x.uid !== me.uid && x.username && !following.has(x.uid)).map(x => {
+        let score = 0;
+        const why = [], favs = (x.favs || []).filter(d => mineT.favs.includes(d)), sets = (x.sets || []).filter(id => mineT.sets.includes(id));
+        if (same(p.city, x.city) && same(p.state, x.state)) { score += 6; why.push(`Perto de você: ${x.city}`); }
+        else if (p.state && p.state === x.state) { score += 3; why.push(`Também em ${x.state}`); }
+        if (favs.length) { score += favs.length * 2; why.push(`Também coleciona ${favs.slice(0, 3).map(d => sp?.byDex.get(d) || '').filter(Boolean).join(', ')}`); }
+        if (sets.length) { score += sets.length; why.push(plural(sets.length, 'set em comum', 'sets em comum')); }
+        return { x, score, why };
+      }).sort((a, b) => b.score - a.score || (b.x.cards || 0) - (a.x.cards || 0)).slice(0, 20);
+      for (const r of ranked) people.set(r.x.uid, r.x);
+      const acts = (await Promise.all(ranked.slice(0, 10).map(r => db().collection('users').doc(r.x.uid).collection('activity').orderBy('at', 'desc').limit(3).get()
+        .then(q => q.docs.map(d => ({ ...d.data(), aid: d.id }))).catch(() => [])))).flat().sort((a, b) => b.at - a.at).slice(0, 20);
+      feed = await withCounts(acts);
+      if (route.tab !== 'social' || (route.stab || 'friends') !== 'community') return;
+      const place = !p.state ? '<p class="muted small">Dica: informe sua cidade e estado em Perfil › Editar perfil para encontrar colecionadores perto de você.</p>' : '';
+      box.innerHTML = `${place}<h2>Sugestões para você</h2>
+        ${ranked.length ? `<div class="suggest">${ranked.map(({ x, why }) => `<div class="person suggestion"><button type="button" class="person-main" data-friend="${esc(x.username)}"><span class="ring-avatar" ${ringAttrs(x.ring)}>${face(x)}</span>
+          <span><b>${esc(x.name || x.username)}</b><span class="muted small">@${esc(x.username)} · ${plural(x.cards || 0, 'carta', 'cartas')}</span>${why.length ? `<span class="small why">${esc(why.join(' · '))}</span>` : ''}</span></button>
+          <button class="btn auto" type="button" data-follow="${esc(x.uid)}" data-username="${esc(x.username)}">Seguir</button></div>`).join('')}</div>`
+          : '<p class="muted">Ainda não há outros perfis públicos. Convide seus amigos!</p>'}
+        ${feed.length ? `<h2>Atividade da comunidade</h2>${feed.map(post).join('')}` : ''}`;
+    } catch (e) {
+      box.innerHTML = '<p class="muted">Não consegui carregar a comunidade agora.</p>';
+    }
+  }
   const actRef = a => db().collection('users').doc(a.uid).collection('activity').doc(a.aid);
   function drawFeed(followingCount) {
     const box = $('#feed'); if (!box || route.tab !== 'social') return;
     if (!feed.length) {
       box.innerHTML = `<div class="empty"><h2>${followingCount ? 'Nada novo por aqui' : 'Seu feed está vazio'}</h2>
-        <p class="muted">${followingCount ? 'Quando seus amigos adicionarem cartas, elas aparecem aqui.' : 'Procure seus amigos pelo nome de usuário e siga para ver as cartas que eles adicionam.'}</p></div>`;
+        <p class="muted">${followingCount ? 'Quando seus amigos adicionarem cartas, elas aparecem aqui.' : 'Procure seus amigos pelo nome de usuário ou veja sugestões na aba Comunidade.'}</p></div>`;
       return;
     }
     box.innerHTML = feed.map(post).join('');
@@ -383,7 +432,8 @@ window.Social = (() => {
   document.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     const d = b.dataset;
-    if (d.shareProfile !== undefined) share();
+    if (d.stab) { route.stab = d.stab; renderSocial(); }
+    else if (d.shareProfile !== undefined) share();
     else if (d.follow) toggleFollow(d.follow, d.username, b);
     else if (d.like) toggleLike(d.like, b);
     else if (d.comments) openComments(d.comments);

@@ -15,7 +15,7 @@ window.Desk = (() => {
   }
   function render() {
     chrome();
-    if (!wide.matches) { if (route.tab === 'cards') route.tab = 'home'; return false; }
+    if (!wide.matches) return false;
     if (route.tab === 'home') { home(); return true; }
     if (route.tab === 'cards') { cards(); return true; }
     return false;
@@ -53,7 +53,7 @@ window.Desk = (() => {
             : '<p class="muted">Nenhuma carta ainda.</p>'}</section>
         <section class="panel span-5"><div class="panel-head"><h2>Seus sets</h2><button type="button" data-my-sets>Ver todos</button></div>
           <div class="set-rows" id="deskSets">${all.length ? '<p class="muted">Carregando…</p>' : '<p class="muted">Os sets das suas cartas aparecem aqui.</p>'}</div></section>
-        ${recent.length ? `<section class="span-12 section"><div class="panel-head"><h2>Adicionadas recentemente</h2></div>
+        ${recent.length ? `<section class="span-12 section"><div class="panel-head"><h2>Adicionadas recentemente</h2><button type="button" data-mine="recent">Ver as últimas 100</button></div>
           <div class="thumb-grid">${recent.map(c => `<button type="button" class="thumb-card" data-card="${esc(c.id)}"><span class="frame">${imgTag(c, 'low', c.name)}</span><b>${esc(c.name)}</b><span class="muted small">${esc(c.setName)}</span></button>`).join('')}</div></section>` : ''}
       </div>`;
     bindChart();
@@ -83,14 +83,17 @@ window.Desk = (() => {
   function rows() {
     const q = norm(filter.q);
     const col = COLS.find(c => c[0] === sort.key)[2];
-    return list().filter(c => (!q || norm(c.name).includes(q) || norm(c.setName).includes(q))
-      && (!filter.set || c.setId === filter.set) && (!filter.kind || kindOf(c) === filter.kind))
-      .sort((a, b) => { const x = col(a), y = col(b); return (typeof x === 'string' ? x.localeCompare(y, 'pt-BR') : x - y) * sort.dir; });
+    const view_ = route.mview || 'all';
+    const r = list().filter(c => (!q || norm(c.name).includes(q) || norm(c.setName).includes(q))
+      && (!filter.set || c.setId === filter.set) && (!filter.kind || kindOf(c) === filter.kind)
+      && (view_ !== 'dupes' || qtyOf(c) > 1) && (view_ !== 'hot' || potential(c)?.high));
+    if (view_ === 'recent') return r.sort((a, b) => b.addedAt - a.addedAt).slice(0, 100);
+    return r.sort((a, b) => { const x = col(a), y = col(b); return (typeof x === 'string' ? x.localeCompare(y, 'pt-BR') : x - y) * sort.dir; });
   }
   function tableBody() {
     const r = rows(), copies = r.reduce((a, c) => a + qtyOf(c), 0), total = r.reduce((a, c) => a + valueOf(c), 0);
     const body = r.map(c => `<tr data-card="${esc(c.id)}" tabindex="0">
-      <td><span class="cell-card"><span class="thumb">${imgTag(c, 'low', '')}</span><b>${esc(c.name)}</b>${(c.graded || []).map(g => ` <span class="pill slab-pill">${esc(gradeLabel(g))}</span>`).join('')}${store.profile.showcase.includes(c.id) ? '<span class="star-mark" title="Na vitrine">★</span>' : ''}</span></td>
+      <td><span class="cell-card"><span class="thumb">${imgTag(c, 'low', '')}</span><b>${esc(c.name)}</b>${hotBadge(c)}${(c.graded || []).map(g => ` <span class="pill slab-pill">${esc(gradeLabel(g))}</span>`).join('')}${store.profile.showcase.includes(c.id) ? '<span class="star-mark" title="Na vitrine">★</span>' : ''}</span></td>
       <td>${esc(c.setName)}${tagOf(c.id) ? ` <span class="pill">${tagOf(c.id)}</span>` : ''}</td><td class="num">${esc(c.localId)}</td><td class="muted col-rarity">${esc(c.rarity || '—')}</td>
       <td class="num right">${qtyOf(c)}</td><td class="num right">${money(unit(c))}${c.custom != null ? ' <span class="pill">seu</span>' : ''}</td><td class="num right"><b>${money(valueOf(c))}</b></td></tr>`).join('');
     return `<tbody>${body || '<tr><td colspan="7" class="muted empty-row">Nenhuma carta com esses filtros.</td></tr>'}</tbody>
@@ -104,6 +107,7 @@ window.Desk = (() => {
     const all = list(), sets = new Map(all.map(c => [c.setId, c.setName]));
     view.innerHTML = `<div class="page-head"><div><h1>Minhas cartas</h1><span class="muted">${plural(copiesCount(), 'carta', 'cartas')} · ${money(collectionValue())}</span></div>
         <button class="btn alt auto" type="button" data-csv>Exportar planilha</button></div>
+      <div class="seg mine-views" role="tablist" aria-label="Quais cartas">${MINE_TABS.slice().sort((x, y) => (x[0] === 'all' ? -1 : y[0] === 'all' ? 1 : 0)).map(([k, l]) => `<button type="button" role="tab" data-mine="${k}" class="${(route.mview || 'all') === k ? 'on' : ''}">${k === 'recent' ? 'Últimas 100' : l}</button>`).join('')}</div>
       <div class="toolbar">
         <input id="cardFilter" class="field" type="search" placeholder="Filtrar por nome ou set" aria-label="Filtrar cartas" value="${esc(filter.q)}" autocomplete="off">
         <select id="cardSet" class="field" aria-label="Set"><option value="">Todos os sets</option>${[...sets].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR')).map(([id, name]) => `<option value="${esc(id)}"${filter.set === id ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select>

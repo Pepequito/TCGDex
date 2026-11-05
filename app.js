@@ -49,6 +49,7 @@ const preferName = (pt, en) => (store.namesEn ? en || pt : pt || en || '').trim(
 const isPocket = id => /^(A|B)\d+[a-z]?$|^P-/.test(id);
 
 // A lista em inglês é a mais completa; os nomes em português entram por cima quando existem.
+const SET_AGE = new Map();
 // id -> [nome em português, nome em inglês]
 const SOON = { me06: ['Reinado Delta', 'Delta Reign'] };
 const getSets = () => once('sets', async () => {
@@ -62,6 +63,9 @@ const getSets = () => once('sets', async () => {
   const soon = Object.entries(SOON).filter(([id]) => !known.has(id)).map(([id, [pt, enName]]) => ({
     id, nameEn: enName, name: preferName(pt, enName), official: 0, total: 0, logoPt: ptLogos[id], serie: 'me', soon: true,
   }));
+  // Quantos sets saíram depois de cada um (a TCGdex lista do mais antigo ao mais novo, sem datas).
+  const west = en.filter(s => !isPocket(s.id));
+  west.forEach((s, i) => SET_AGE.set(s.id, west.length - 1 - i));
   return soon.concat(en.filter(s => !isPocket(s.id)).map(s => ({
     id: s.id, nameEn: s.name, name: preferName(ptById.get(s.id)?.name, s.name),
     official: s.cardCount.official, total: s.cardCount.total, logoPt: ptLogos[s.id], logo: ptById.get(s.id)?.logo || s.logo, logoAlt: s.logo, logoUrl: extra[s.id],
@@ -144,7 +148,10 @@ function extractPrices(card) {
     const cm = p.cardmarket;
     const eur = v === 'reverse' ? (cm?.['trend-holo'] || cm?.['avg-holo']) : cm?.trend;
     const usd = tcg?.marketPrice ?? tcg?.midPrice ?? null;
-    if (usd != null || eur) out[v] = { usd, eur: eur || null };
+    // Médias da Cardmarket de 7 e 30 dias: mostram se o preço está subindo ou caindo.
+    const holo = v === 'reverse' ? '-holo' : '';
+    const m7 = cm?.['avg7' + holo] || null, m30 = cm?.['avg30' + holo] || null;
+    if (usd != null || eur) out[v] = { usd, eur: eur || null, ...(m7 && m30 ? { m7, m30 } : {}) };
   }
   return out;
 }
@@ -234,6 +241,34 @@ function migrateEditions() {
   return ids;
 }
 window.migrateEditions = migrateEditions;
+/* ---------- Potencial de valorização ---------- */
+// Indicador automático, não recomendação de investimento. Soma sinais que costumam acompanhar cartas que valorizam:
+// preço subindo (média de 7 dias acima da de 30 na Cardmarket), raridade de alta demanda, Pokémon muito procurado
+// e set mais antigo (menos reimpressão). Cartas baratas ficam de fora. 4 pontos ou mais = alto potencial.
+const HOT_RARITY = /special illustration|hyper|secret|rainbow|gold|crown|amazing|shining|\bstar\b|ilustra[cç][aã]o rara especial|hiper|secreta|arco[- ]?[ií]ris|dourad/i;
+const GOOD_RARITY = /illustration rare|ultra rare|double rare|full art|ace spec|radiant|shiny|ilustra[cç][aã]o rara|ultra rara|rara dupla|arte completa|radiante|brilhante/i;
+const POPULAR = /charizard|pikachu|umbreon|eevee|espeon|sylveon|vaporeon|jolteon|flareon|leafeon|glaceon|mewtwo|\bmew\b|gengar|rayquaza|lugia|ho-oh|gyarados|dragonite|snorlax|lucario|greninja|gardevoir|blastoise|venusaur|mimikyu|giratina|arceus|tyranitar|garchomp|charmander|squirtle|bulbasaur|psyduck|gholdengo|miraidon|koraidon/i;
+function potential(c) {
+  if (!c || isAsian(c.id) || c.setId === 'custom') return null;
+  const keys = Object.keys(c.qty || {}), main = variantOfKey(keys.sort((x, y) => (c.qty[y] || 0) - (c.qty[x] || 0))[0] || Object.keys(c.prices || {})[0] || 'normal');
+  const p = c.prices?.[main] || Object.values(c.prices || {})[0], usd = toUsd(p);
+  if (!usd || usd < 5) return null;
+  let score = 0;
+  const why = [];
+  if (p.m7 && p.m30) {
+    const r = p.m7 / p.m30, pct = Math.round((r - 1) * 100);
+    if (r >= 1.25) { score += 2; why.push(`Preço subindo: média da semana ${pct}% acima da média do mês`); }
+    else if (r >= 1.1) { score += 1; why.push(`Preço em alta: média da semana ${pct}% acima da média do mês`); }
+    else if (r <= .85) { score -= 2; why.push(`Preço em queda: média da semana ${-pct}% abaixo da média do mês`); }
+  }
+  const rarity = `${c.rarity || ''}`;
+  if (HOT_RARITY.test(rarity)) { score += 2; why.push('Raridade de alta demanda'); }
+  else if (GOOD_RARITY.test(rarity)) { score += 1; why.push('Raridade procurada'); }
+  if (POPULAR.test(`${c.nameEn || ''} ${c.name || ''}`)) { score += 1; why.push('Pokémon muito procurado por colecionadores'); }
+  if ((SET_AGE.get(c.setId) ?? 0) >= 12) { score += 1; why.push('Set mais antigo: menos reimpressões'); }
+  return { score, why, high: score >= 4 };
+}
+const hotBadge = c => potential(store.cards[c.id] || c)?.high ? '<span class="hot" title="Alto potencial de valorização" aria-label="Alto potencial de valorização">📈</span>' : '';
 const unitUsd = (c, key) => {
   const pt = isPtKey(key), custom = pt ? c.customPt : c.custom;
   if (custom != null) return customUsd(custom);
