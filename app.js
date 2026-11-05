@@ -160,7 +160,7 @@ const imageUrl = (base, q = 'low') => !base ? '' : base.startsWith('data:') ? ba
 function imgTag(c, q = 'low', alt = '') {
   // Carta que a pessoa só tem na edição em inglês aparece com a arte em inglês nas listas.
   if (!c.edArt && typeof ownEdition === 'function' && ownEdition(c) === 'en') c = { ...c, image: c.imageEn || store.cards[c.id].imageEn || c.image };
-  if (!c.image) return `<div class="noimg">${esc(c.name)}</div>`;
+  if (!c.image) return window.Photos?.has(c.id) ? Photos.imgHtml(c.id, alt) : `<div class="noimg">${esc(c.name)}</div>`;
   const fallback = c.imageEn && c.imageEn !== c.image ? imageUrl(c.imageEn, q) : '';
   return `<img loading="lazy" alt="${esc(alt)}" src="${esc(imageUrl(c.image, q))}" data-fallback="${esc(fallback)}">`;
 }

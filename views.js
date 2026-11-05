@@ -753,7 +753,7 @@ async function showCard(id) {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
+    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}${window.Photos?.sendButton(sheetCard) || ''}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
 

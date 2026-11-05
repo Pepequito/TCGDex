@@ -102,6 +102,20 @@ service cloud.firestore {
       }
     }
 
+    // Fotos enviadas pela comunidade para cartas sem imagem: membro envia; só o admin vê, aprova e apaga.
+    match /cardPhotos/{pid} {
+      allow create: if isMember() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.cardId is string && request.resource.data.cardId.size() <= 80
+        && request.resource.data.photo is string && request.resource.data.photo.size() <= 300000;
+      allow read, update, delete: if isAdmin();
+    }
+    // Fotos aprovadas (e o índice _index): todos leem, só o admin grava.
+    match /cardImages/{cid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Relatos de problema: qualquer pessoa envia (até convidado); só o admin lê e apaga.
     match /reports/{rid} {
       allow create: if request.resource.data.text is string && request.resource.data.text.size() <= 1000

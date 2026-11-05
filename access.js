@@ -166,6 +166,7 @@ window.Access = (() => {
           <button class="btn alt" type="button" data-tab="reports">Ver relatos de problema</button>
         </section>
       </div>
+      <section class="section"><h2>Fotos enviadas pela comunidade</h2><div id="adminPhotos"><p class="muted">Carregando…</p></div></section>
       <section class="section"><h2>Convites</h2>
         ${invites.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Código</th><th>Para</th><th class="right">Usos</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>
           ${invites.map(i => `<tr><td class="num"><b>${esc(i.code)}</b></td><td>${esc(i.label || '—')}</td><td class="num right">${i.uses || 0}/${i.maxUses}</td><td class="muted">${fmt(i.createdAt)}</td>
@@ -181,6 +182,7 @@ window.Access = (() => {
             <td>${m.blocked ? '<span class="pill danger">Bloqueado</span>' : '<span class="pill ok">Ativo</span>'}</td>
             <td class="right"><button type="button" class="link${m.blocked ? '' : ' danger'}" data-block-member="${esc(m.uid)}">${m.blocked ? 'Desbloquear' : 'Bloquear'}</button></td></tr>`).join('')}</tbody></table></div>`
           : '<p class="muted">Ninguém entrou com convite ainda.</p>'}</section>`;
+    window.Photos?.adminBlock();
   }
 
   /* ---------- Eventos ---------- */

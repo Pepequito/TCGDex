@@ -683,3 +683,10 @@ button.chip { cursor: pointer; }
 .set-tile .logo .fan img:nth-child(2) { --r: -14deg; --x: -26px; }
 .set-tile .logo .fan img:nth-child(3) { --r: 14deg; --x: 26px; }
 .set-tile .logo .fan img:nth-child(1) { z-index: 1; }
+/* ---------- Fotos da comunidade ---------- */
+.photo-ask { display: grid; gap: 8px; padding: 12px 14px; border-radius: 14px; border: 1px dashed rgb(63 216 255 / .45); background: rgb(63 216 255 / .06); }
+.ok-note { color: #3ddc97; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.photo-item { grid-template-columns: 110px 1fr; align-items: start; }
+.photo-item img { width: 110px; aspect-ratio: 63/88; object-fit: cover; border-radius: 8px; grid-row: span 2; }
+.photo-item b, .photo-item .small { display: block; overflow-wrap: anywhere; }
