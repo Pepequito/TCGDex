@@ -55,7 +55,7 @@ const getSets = () => once('sets', async () => {
   const asianLists = Object.entries(ASIAN).map(([pre, L]) => getJSON(`${API}/${L.api}/sets`).then(list => list.map(s => ({ ...s, pre }))).catch(() => []));
   const [en, pt, extra, ...asian] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({})), ...asianLists]);
   // Logos oficiais em português do site da Pokémon Brasil (tools/br-logos.js) têm prioridade.
-  const [ptLogos, covers] = await Promise.all([getJSON('data/set-logos-pt.json').catch(() => ({})), getJSON('data/set-covers.json').catch(() => ({}))]);
+  const [ptLogos, arts] = await Promise.all([getJSON('data/set-logos-pt.json').catch(() => ({})), getJSON('data/set-art.json').catch(() => ({}))]);
   const ptById = new Map(pt.map(s => [s.id, s]));
   const known = new Set(en.map(s => s.id));
   // Sets anunciados que a TCGdex ainda não publicou aparecem como "em breve", com o logo oficial.
@@ -68,7 +68,7 @@ const getSets = () => once('sets', async () => {
     symbol: s.symbol || ptById.get(s.id)?.symbol,
     serie: /assets\.tcgdex\.net\/(?:en|pt|univ)\/([^/]+)\//.exec(s.logo || s.symbol || '')?.[1] || /^(me|swsh|sv|sm|xy|bw|hgss|dp|pl|ex|neo|base|gym|ecard)/.exec(s.id)?.[1] || '',
   })).reverse()).concat(...asian.map(list => list.filter(s => !isPocket(s.id)).map(s => ({
-    id: s.pre + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo, cover: covers[s.pre + s.id],
+    id: s.pre + s.id, nameEn: s.name, name: s.name.trim(), official: s.cardCount.official, total: s.cardCount.total, logo: s.logo, art: arts[s.pre + s.id],
   })).reverse()));
 });
 // Cartas cadastradas à mão ficam num set próprio, montado a partir da coleção.
@@ -188,14 +188,39 @@ const qtyOf = c => rawQty(c) + (c.graded?.length || 0);
 const customUsd = brl => brl / (store.fx?.BRL || 5.4);
 // Graduada sem valor informado conta pelo preço da carta comum da mesma variante.
 const gradedUsd = (c, g) => g.value != null ? customUsd(g.value) : toUsd(c.prices?.[g.variant]) || 0;
-const valueOf = c => (c.custom != null ? rawQty(c) * customUsd(c.custom)
-  : Object.entries(c.qty || {}).reduce((a, [v, n]) => a + n * (toUsd(c.prices?.[v]) || 0), 0))
-  + (c.graded || []).reduce((a, g) => a + gradedUsd(c, g), 0);
+// Edição das cópias ocidentais: a chave "holo" é a carta em inglês e "holo@pt" a edição brasileira.
+// O mercado brasileiro não tem base pública de preços: a cópia brasileira vale o valor que a pessoa definiu
+// para ela (customPt) ou o preço em inglês multiplicado pelo fator de Ajustes (ptFactor).
+const PT = '@pt';
+store.edition ??= 'pt';
+store.ptFactor ??= 1;
+const keyOf = (variant, lang) => lang === 'pt' ? variant + PT : variant;
+const isPtKey = k => k.endsWith(PT);
+const variantOfKey = k => isPtKey(k) ? k.slice(0, -PT.length) : k;
+const hasEditions = card => !isAsian(card.id) && card.setId !== 'custom' && !String(card.id).startsWith('custom:');
+const qtyIn = (c, lang) => Object.entries(c?.qty || {}).filter(([k]) => isPtKey(k) === (lang === 'pt')).reduce((s, [, n]) => s + n, 0);
+// Edição mostrada no painel da carta: a escolhida na hora; senão a única que a pessoa tem; senão a padrão.
+let sheetLang = null;
+function editionNow(card) {
+  if (!hasEditions(card)) return 'en';
+  if (sheetLang) return sheetLang;
+  const own = store.cards[card.id], pt = qtyIn(own, 'pt'), en = qtyIn(own, 'en');
+  return pt && !en ? 'pt' : en && !pt ? 'en' : store.edition;
+}
+const unitUsd = (c, key) => {
+  const pt = isPtKey(key), custom = pt ? c.customPt : c.custom;
+  if (custom != null) return customUsd(custom);
+  const base = toUsd(c.prices?.[variantOfKey(key)]) || 0;
+  return pt ? base * store.ptFactor : base;
+};
+const valueOf = c => Object.entries(c.qty || {}).reduce((s, [k, n]) => s + n * unitUsd(c, k), 0)
+  + (c.graded || []).reduce((s, g) => s + gradedUsd(c, g), 0);
 const gradeLabel = g => `${g.company} ${g.grade}`;
-function setCustom(id, brl) {
+function setCustom(id, brl, lang = 'en') {
   const c = store.cards[id];
   if (!c) return;
-  if (brl == null) delete c.custom; else c.custom = brl;
+  const field = lang === 'pt' ? 'customPt' : 'custom';
+  if (brl == null) delete c[field]; else c[field] = brl;
   c.updatedAt = Date.now();
   save();
   window.Sync?.changed(id);
@@ -224,7 +249,10 @@ function touched(id) {
 function addGraded(card, g, fromRaw) {
   const c = ensureCard(card);
   c.prices = card.prices || c.prices;
-  if (fromRaw && c.qty[g.variant] > 0) { c.qty[g.variant]--; if (!c.qty[g.variant]) delete c.qty[g.variant]; }
+  if (fromRaw) {
+    const key = [keyOf(g.variant, editionNow(card)), g.variant, keyOf(g.variant, 'pt')].find(k => c.qty[k] > 0);
+    if (key) { c.qty[key]--; if (!c.qty[key]) delete c.qty[key]; }
+  }
   (c.graded ??= []).push({ gid: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...g });
   touched(card.id);
   if (!fromRaw) window.Social?.added(c);
@@ -245,8 +273,9 @@ function setQty(card, variant, delta) {
     };
   }
   c.prices = card.prices || c.prices;
-  c.qty[variant] = Math.max(0, (c.qty[variant] || 0) + delta);
-  if (!c.qty[variant]) delete c.qty[variant];
+  const key = keyOf(variant, editionNow(card));
+  c.qty[key] = Math.max(0, (c.qty[key] || 0) + delta);
+  if (!c.qty[key]) delete c.qty[key];
   touched(card.id);
   if (delta > 0) window.Social?.added(c);
 }
@@ -290,6 +319,7 @@ const sheet = $('#sheet'), sheetBack = $('#sheetBack');
 let onSheetClose = null;
 function openSheet(html, onClose = null) {
   sheet.dataset.openedAt = Date.now();
+  sheetLang = null;
   document.body.classList.add('drawer');
   sheet.innerHTML = html; sheet.hidden = sheetBack.hidden = false; sheet.scrollTop = 0; onSheetClose = onClose;
 }
@@ -669,7 +699,7 @@ function showMatch({ cards }, resume = true) {
     const variant = (detail.variants.length ? VARIANTS[detail.variants[0]].label : 'Normal').toLowerCase();
     sheet.innerHTML = `${cardHead(picked ? detail : { ...detail, setName: "Coleção a confirmar", localId: "?" })}${choose}<div id="variants">${variantRows(detail)}</div>${picked ? gradedBlock(detail) : ''}${alts}${cardExtras(detail)}
       <div class="sheet-actions">
-        ${picked ? `<button class="btn" type="button" data-add>Adicionar ${esc(variant)} · ${esc(detail.setName)}</button>`
+        ${picked ? `<button class="btn" type="button" data-add>Adicionar ${esc(variant)}${hasEditions(detail) ? ` · <span data-edition-label>${editionNow(detail) === 'pt' ? 'BR' : 'EN'}</span>` : ''} · ${esc(detail.setName)}</button>`
           : '<button class="btn" type="button" disabled>Escolha a coleção acima</button>'}
         <button class="btn alt" type="button" data-close>${resume ? 'Continuar escaneando' : 'Fechar'}</button></div>`;
     $$('[data-alt]', sheet).forEach(b => b.onclick = () => { idx = +b.dataset.alt; picked = true; draw(); });
@@ -677,7 +707,7 @@ function showMatch({ cards }, resume = true) {
       if (!sheetArmed()) return;
       store.lastLang = langOf(detail.id);
       setQty(detail, detail.variants[0] || 'normal', 1);
-      toast(`${detail.name} adicionada em ${detail.setName}`);
+      toast(`${detail.name} adicionada em ${detail.setName}${hasEditions(detail) ? editionNow(detail) === 'pt' ? ' (edição brasileira)' : ' (edição em inglês)' : ''}`);
       closeSheet();
     });
   };
@@ -773,7 +803,7 @@ document.addEventListener('submit', async e => {
   if (e.target.id === 'manualForm') return saveManual();
   if (e.target.id === 'valueForm') {
     const text = $('#valueInput').value.trim();
-    setCustom(sheetCard.id, text ? parseBrl(text) : null);
+    setCustom(sheetCard.id, text ? parseBrl(text) : null, editionNow(sheetCard));
     $('#variants').innerHTML = variantRows(sheetCard);
     return toast(text ? 'Valor salvo' : 'Voltando ao preço automático');
   }

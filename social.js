@@ -157,7 +157,7 @@ window.Social = (() => {
     if (!mine?.username) { view.innerHTML = `${head}<div class="panel social">${claimForm()}</div>`; return; }
     view.innerHTML = `${head}
       <div class="social-grid"><div class="social-side">
-        <div class="panel"><div class="handle-row"><button type="button" class="person-main" data-friend="${esc(mine.username)}"><span class="ring-avatar" style="${ringStyle(store.profile.ring)}">${avatar()}</span><span><b>@${esc(mine.username)}</b><span class="muted small" id="followCount">…</span></span></button>
+        <div class="panel"><div class="handle-row"><button type="button" class="person-main" data-friend="${esc(mine.username)}"><span class="ring-avatar" ${ringAttrs(store.profile.ring)}>${avatar()}</span><span><b>@${esc(mine.username)}</b><span class="muted small" id="followCount">…</span></span></button>
           <button class="btn alt auto" type="button" data-share-profile>Convidar</button></div>
           <input id="peopleQ" class="field" type="search" placeholder="Procurar pessoas por @usuário" aria-label="Procurar pessoas" autocomplete="off" autocapitalize="none">
           <div id="peopleOut" class="people"></div></div>
@@ -215,7 +215,7 @@ window.Social = (() => {
     const mineAct = a.uid === me.uid, p = mineAct ? { photo: store.profile.photo || window.Sync?.user?.()?.photo, name: trainerName(), ring: store.profile.ring } : people.get(a.uid) || a;
     const cards = a.cards || [], key = `${a.uid}/${a.aid}`;
     return `<article class="post" data-act="${esc(key)}">
-      <header><button type="button" class="person-main" data-friend="${esc(a.username)}"><span class="ring-avatar" style="${ringStyle(p.ring)}">${face(p)}</span>
+      <header><button type="button" class="person-main" data-friend="${esc(a.username)}"><span class="ring-avatar" ${ringAttrs(p.ring)}>${face(p)}</span>
         <span><b>${esc(p.name || a.name || a.username)}</b><span class="muted small">@${esc(a.username)} · ${ago(a.at)}</span></span></button></header>
       <p>${mineAct ? 'Você adicionou' : 'Adicionou'} ${cards.length === 1 ? `<b>${esc(cards[0].name)}</b> <span class="muted">· ${esc(cards[0].setName)}</span>` : `<b>${cards.length} cartas</b> à coleção`}</p>
       <div class="post-cards${cards.length === 1 ? ' one' : ''}">${cards.slice(0, 6).map(c => `<button type="button" class="pocket catalog" data-card="${esc(c.id)}" aria-label="${esc(c.name)}">${imgTag(c, cards.length === 1 ? 'high' : 'low', c.name)}${store.cards[c.id] && !mineAct ? '<span class="have">✓</span>' : ''}</button>`).join('')}
@@ -322,7 +322,7 @@ window.Social = (() => {
       : !me ? '<button class="btn" type="button" data-gate>Entre para seguir</button>' : '';
     const sorted = cards ? [...cards].sort((a, b) => String(a.setName).localeCompare(String(b.setName), 'pt-BR') || (parseInt(a.localId, 10) || 0) - (parseInt(b.localId, 10) || 0)) : [];
     view.innerHTML = `${back}${bannerHtml(p.banner, p.bannerImage)}
-      <div class="identity"><span class="ring-avatar" style="${ringStyle(p.ring)}">${face(p)}</span><h1>${esc(p.name || name)}</h1><span class="muted">@${esc(name)}</span>${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
+      <div class="identity"><span class="ring-avatar" ${ringAttrs(p.ring)}>${face(p)}</span><h1>${esc(p.name || name)}</h1><span class="muted">@${esc(name)}</span>${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
       ${followBtn}
       <div class="stat-grid">
         <div class="stat"><b>${p.cards ?? 0}</b><span>Cartas</span></div>

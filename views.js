@@ -34,28 +34,57 @@ function avatar() {
   return `<span class="avatar initials">${esc(trainerName().trim().charAt(0).toUpperCase() || 'T')}</span>`;
 }
 // Fundos do topo do perfil e aros em volta da foto. A chave fica no perfil e vai junto para o perfil público.
+// Padrões desenhados em SVG, repetidos como papel de parede.
+const svgBg = svg => `url('data:image/svg+xml,${encodeURIComponent(svg)}')`;
+const BALL = (c, x, y, r, o) => `<g transform="translate(${x} ${y})" fill="none" stroke="${c}" stroke-opacity="${o}" stroke-width="3"><circle r="${r}"/><path d="M-${r} 0h${r * .62}M${r * .38} 0h${r * .62}"/><circle r="${r * .38}"/></g>`;
+const PATTERNS = {
+  pokebolas: svgBg(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">${BALL('#000000', 30, 30, 20, .16)}${BALL('#000000', 90, 90, 20, .16)}</svg>`),
+  raios: svgBg('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><path d="M30 6 14 40h14l-8 26 26-34H32l10-26z" fill="#fff" fill-opacity=".28"/><path d="M74 48 64 68h8l-5 16 16-21h-9l6-15z" fill="#7a4a00" fill-opacity=".18"/></svg>'),
+  grama: svgBg('<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><path d="M4 40C8 28 10 18 8 6c6 10 8 22 6 34M20 40c2-10 6-18 14-26-4 10-6 18-6 26M38 40c0-12-4-20-10-28 10 6 16 16 16 28M50 40c2-8 4-14 10-20-2 8-2 14-2 20" fill="#062f1d" fill-opacity=".35"/></svg>'),
+  estrelas: svgBg('<svg xmlns="http://www.w3.org/2000/svg" width="140" height="100"><g fill="#fff"><circle cx="12" cy="18" r="1.4" opacity=".8"/><circle cx="64" cy="8" r="1" opacity=".6"/><circle cx="110" cy="30" r="1.6" opacity=".9"/><circle cx="40" cy="60" r="1" opacity=".5"/><circle cx="90" cy="78" r="1.3" opacity=".7"/><circle cx="130" cy="90" r=".9" opacity=".5"/><path d="M80 40l1.6 4 4 1.6-4 1.6L80 51l-1.6-3.800L74.400 45.600l4-1.600z" opacity=".9"/></g></svg>'),
+  pokedex: svgBg('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="150"><circle cx="46" cy="46" r="30" fill="#fff"/><circle cx="46" cy="46" r="23" fill="#2a8cff"/><circle cx="38" cy="38" r="8" fill="#a9dcff"/><circle cx="96" cy="26" r="7" fill="#ff3b3b" stroke="#7a0b0b" stroke-width="2"/><circle cx="118" cy="26" r="7" fill="#ffd400" stroke="#7a5b00" stroke-width="2"/><circle cx="140" cy="26" r="7" fill="#3ddc5a" stroke="#0b5a1d" stroke-width="2"/><path d="M0 104h170l30-30h200" fill="none" stroke="#7a0b0b" stroke-width="5"/></svg>'),
+};
+// Fundos do topo do perfil e aros em volta da foto. A chave fica no perfil e vai junto para o perfil público.
 const BANNERS = {
+  pokebola: ['Pokébola', `${PATTERNS.pokebolas}, linear-gradient(180deg, #e3350d 0 58%, #1a1a1a 58% 64%, #f2f2f2 64%)`],
+  pikachu: ['Pikachu', `${PATTERNS.raios}, radial-gradient(8% 19% at 12% 76%, #ff5a4f 96%, transparent 100%), radial-gradient(8% 19% at 88% 76%, #ff5a4f 96%, transparent 100%), linear-gradient(160deg, #fff27a, #ffd733 45%, #f2a900)`],
+  pokedex: ['Pokédex', `${PATTERNS.pokedex} left top / auto 100% no-repeat, linear-gradient(160deg, #ff4b4b, #d61f1f 60%, #8f0d0d)`],
+  gramaalta: ['Grama alta', `${PATTERNS.grama}, linear-gradient(180deg, #9be15d 0%, #4caf50 55%, #1f7a3a 100%)`],
+  noite: ['Céu noturno', `${PATTERNS.estrelas}, radial-gradient(circle at 80% 10%, #4a3f9f 0%, #1a1747 50%, #05060f 100%)`],
+  ultraball: ['Ultra Ball', `${PATTERNS.pokebolas}, linear-gradient(90deg, transparent 0 30%, #f5c518 30% 38%, transparent 38% 62%, #f5c518 62% 70%, transparent 70%) top / 100% 58% no-repeat, linear-gradient(180deg, #1e1e1e 0 58%, #f5c518 58% 64%, #f2f2f2 64%)`],
+  masterball: ['Master Ball', `radial-gradient(7% 17% at 22% 30%, #ff6fae 96%, transparent 100%), radial-gradient(7% 17% at 78% 30%, #ff6fae 96%, transparent 100%), ${PATTERNS.pokebolas}, linear-gradient(180deg, #8a46cf 0 58%, #1a1a1a 58% 64%, #f2f2f2 64%)`],
   aurora: ['Boosterz', 'conic-gradient(from 200deg at 30% 120%, #1f6fff, #7c3aed, #ff5a2e, #ffb02e, #1f6fff)'],
   fogo: ['Fogo', 'linear-gradient(135deg, #ffcf3f 0%, #ff7a18 45%, #c2185b 100%)'],
   oceano: ['Oceano', 'linear-gradient(160deg, #3fd8ff 0%, #1f6fff 50%, #142067 100%)'],
-  floresta: ['Floresta', 'linear-gradient(150deg, #b5f05b 0%, #22a06b 50%, #0b3d36 100%)'],
-  eletrico: ['Elétrico', 'radial-gradient(circle at 70% 20%, #fff58a, #ffc23d 30%, #6b3df2 100%)'],
   psiquico: ['Psíquico', 'linear-gradient(135deg, #ff7ad9 0%, #8b5cf6 55%, #2b1257 100%)'],
   gelo: ['Gelo', 'linear-gradient(160deg, #ffffff 0%, #a8e9ff 40%, #4f7cff 100%)'],
-  noite: ['Noturno', 'radial-gradient(circle at 20% 30%, #3b3f8f 0%, #141836 55%, #05060f 100%)'],
+  floresta: ['Floresta', 'linear-gradient(150deg, #b5f05b 0%, #22a06b 50%, #0b3d36 100%)'],
+  eletrico: ['Elétrico', 'radial-gradient(circle at 70% 20%, #fff58a, #ffc23d 30%, #6b3df2 100%)'],
   holo: ['Holográfico', 'linear-gradient(115deg, #ff9a9e, #fad0c4, #a1ffce, #8fd3f4, #c2a3ff, #ff9a9e)'],
 };
+// Terceiro item: enfeite desenhado em CSS (orelhas ou aro mais grosso de Poké Ball).
+const BALL_RING = (top, extra = '') => `${extra}linear-gradient(180deg, ${top} 0 44%, #1a1a1a 44% 56%, #f2f2f2 56%)`;
 const RINGS = {
+  pikachu: ['Pikachu', 'linear-gradient(160deg, #fff27a, #ffd733 50%, #e8a400)', 'pikachu'],
+  eevee: ['Eevee', 'linear-gradient(160deg, #f7e3b5, #c08040 55%, #7a4a1e)', 'eevee'],
+  pokebola: ['Pokébola', BALL_RING('#ee1515'), 'ball'],
+  greatball: ['Great Ball', BALL_RING('#2a6be0', 'radial-gradient(circle at 20% 22%, #ee1515 0 13%, transparent 14%), radial-gradient(circle at 80% 22%, #ee1515 0 13%, transparent 14%), '), 'ball'],
+  ultraball: ['Ultra Ball', 'linear-gradient(90deg, transparent 0 24%, #f5c518 24% 36%, transparent 36% 64%, #f5c518 64% 76%, transparent 76%) top / 100% 44% no-repeat, linear-gradient(180deg, #1e1e1e 0 44%, #f5c518 44% 56%, #f2f2f2 56%)', 'ball'],
+  masterball: ['Master Ball', BALL_RING('#8a46cf', 'radial-gradient(circle at 24% 24%, #ff6fae 0 12%, transparent 13%), radial-gradient(circle at 76% 24%, #ff6fae 0 12%, transparent 13%), '), 'ball'],
   foil: ['Holo', 'var(--foil-round)'],
   ouro: ['Ouro', 'linear-gradient(160deg, #fff3b0, #ffc23d 45%, #b86b00)'],
   prata: ['Prata', 'linear-gradient(160deg, #ffffff, #c9d6ea 50%, #6d7f9e)'],
   ciano: ['Ciano', 'linear-gradient(160deg, #a8f3ff, #3fd8ff 50%, #1f6fff)'],
   violeta: ['Violeta', 'linear-gradient(160deg, #e3c8ff, #8b5cf6 50%, #4c1d95)'],
-  fogo: ['Fogo', 'linear-gradient(160deg, #ffe169, #ff7417 50%, #c2185b)'],
   arcoiris: ['Arco-íris', 'conic-gradient(#ff5a5a, #ffc23d, #b5f05b, #3fd8ff, #8b5cf6, #ff5a5a)'],
   nenhum: ['Sem aro', 'transparent'],
 };
-const ringStyle = key => `background:${(RINGS[key] || RINGS.foil)[1]}`;
+// Atributos do aro: a cor e, se houver, o enfeite. Uso: <span class="ring-avatar" ${ringAttrs(chave)}>.
+const ringAttrs = key => {
+  const r = RINGS[key] || RINGS.foil;
+  return `style="background:${r[1]}"${r[2] ? ` data-deco="${r[2]}"` : ''}`;
+};
+const bannerBg = key => (BANNERS[key] || BANNERS.aurora)[1];
 // Fundo a partir de uma carta da coleção: só vale imagem pública (não a foto tirada no aparelho).
 function bannerImage() {
   const c = store.cards[store.profile.bannerCard];
@@ -63,15 +92,15 @@ function bannerImage() {
 }
 function bannerHtml(key, image) {
   if (image) return `<div class="banner art" style="--art:url('${esc(image)}')"></div>`;
-  return `<div class="banner" style="background:${(BANNERS[key] || BANNERS.aurora)[1]}"></div>`;
+  return `<div class="banner" style="background:${bannerBg(key)}"></div>`;
 }
 function personalize() {
   const p = store.profile, cards = [...list()].filter(c => c.image && !c.image.startsWith('data:')).sort((a, b) => valueOf(b) - valueOf(a)).slice(0, 40);
   openSheet(`<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button><h2>Personalizar perfil</h2>
-    <div class="custom-preview">${bannerHtml(p.banner, bannerImage())}<span class="ring-avatar" style="${ringStyle(p.ring)}">${avatar()}</span></div>
+    <div class="custom-preview">${bannerHtml(p.banner, bannerImage())}<span class="ring-avatar" ${ringAttrs(p.ring)}>${avatar()}</span></div>
     <h3>Fundo</h3><div class="swatches">${Object.entries(BANNERS).map(([k, [name, bg]]) => `<button type="button" class="swatch${!p.bannerCard && (p.banner || 'aurora') === k ? ' on' : ''}" data-banner="${k}"><i style="background:${bg}"></i><span>${name}</span></button>`).join('')}</div>
     ${cards.length ? `<h3>Ou a arte de uma carta sua</h3><div class="rail">${cards.map(c => `<button type="button" class="rail-card mini${p.bannerCard === c.id ? ' on' : ''}" data-banner-card="${esc(c.id)}" aria-label="${esc(c.name)}"><span class="frame">${imgTag(c, 'low', c.name)}</span></button>`).join('')}</div>` : ''}
-    <h3>Aro da foto</h3><div class="swatches rings">${Object.entries(RINGS).map(([k, [name, bg]]) => `<button type="button" class="swatch${(p.ring || 'foil') === k ? ' on' : ''}" data-ring="${k}"><i style="background:${bg}"></i><span>${name}</span></button>`).join('')}</div>
+    <h3>Aro da foto</h3><div class="swatches rings">${Object.entries(RINGS).map(([k, [name, bg]]) => `<button type="button" class="swatch${(p.ring || 'foil') === k ? ' on' : ''}" data-ring="${k}"><span class="ring-avatar" ${ringAttrs(k)}><span class="avatar initials blank"></span></span><span>${name}</span></button>`).join('')}</div>
     <button class="btn" type="button" data-close>Concluir</button>`);
 }
 function saveProfile() {
@@ -126,7 +155,7 @@ function railCard(c, label) {
 }
 // Sem logo oficial, vale o símbolo do set; sem símbolo, o código impresso nas cartas ou as iniciais.
 const setCode = s => isAsian(s.id) ? rawOf(s.id) : s.name.split(/\s+/).filter(w => /^[\p{L}\d]/u.test(w) && w.length > 2).map(w => w[0]).join('').slice(0, 4).toUpperCase();
-const setArts = s => [...new Set([!store.namesEn && s.logoPt, s.logo && s.logo + '.webp', s.logoAlt && s.logoAlt + '.webp', s.logoUrl].filter(Boolean))];
+const setArts = s => [...new Set([!store.namesEn && s.logoPt, s.logo && s.logo + '.webp', s.logoAlt && s.logoAlt + '.webp', s.logoUrl, s.art].filter(Boolean))];
 const setArt = s => setArts(s)[0] || '';
 const artFallback = s => esc(setArts(s).slice(1).join('|'));
 function setTile(s, have) {
@@ -134,9 +163,8 @@ function setTile(s, have) {
     <span class="logo">${setArt(s) ? `<img loading="lazy" alt="" data-logo src="${esc(setArt(s))}">` : ''}<em>${esc(setCode(s))}</em></span>
     <b>${esc(s.name)}</b><span class="soon-tag">Em breve</span></button>`;
   const size = s.total || s.official || 1, pct = Math.min(100, have / size * 100), art = setArt(s);
-  const cover = !art && s.cover ? `<img class="cover" loading="lazy" alt="" data-hide-broken src="${esc(imageUrl(s.cover, 'low'))}">` : '';
   return `<button class="set-tile${have >= size ? ' done' : ''}" type="button" data-set="${esc(s.id)}">
-    <span class="logo${art ? '' : ' nologo'}${cover ? ' has-cover' : ''}">${art ? `<img loading="lazy" alt="" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : cover}<em>${esc(setCode(s))}</em></span>
+    <span class="logo${art ? '' : ' nologo'}${s.art && art === s.art ? ' pack' : ''}">${art ? `<img loading="lazy" alt="" data-logo data-next="${artFallback(s)}" src="${esc(art)}">` : ''}<em>${esc(setCode(s))}</em></span>
     <b>${esc(s.name)}</b><span class="bar"><i style="width:${pct}%"></i></span>
     <span class="count"><span>${have}/${size}</span><span>${Math.floor(pct)}%</span></span></button>`;
 }
@@ -157,7 +185,7 @@ async function renderHome() {
     <div class="brand-row brand-lock"><img class="logo" src="icons/logo.webp" alt="Boosterz TCG Tracker"><span class="beta">BETA</span></div>
     <div class="topbar"><div class="hello"><span>Olá, treinador</span><b>${esc(trainerName())}</b></div>
       <span class="top-actions"><button class="icon-btn" type="button" data-tab="search" aria-label="Explorar cartas"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
-      <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil" style="${ringStyle(store.profile.ring)}">${avatar()}</button></span></div>
+      <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil" ${ringAttrs(store.profile.ring)}>${avatar()}</button></span></div>
     <div class="hero"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
       ${cards.length ? valueChart() : ''}
       <div class="chips"><span class="chip"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'}</span><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div></div>
@@ -405,9 +433,9 @@ async function statsBlock() {
   const count = (key, fn = c => qtyOf(c)) => { const m = new Map(); for (const c of cards) { const k = key(c); if (k) m.set(k, (m.get(k) || 0) + fn(c)); } return [...m].sort((a, b) => b[1] - a[1]); };
   const rarities = count(c => c.rarity).slice(0, 8);
   const sets = count(c => c.setName).slice(0, 6);
-  const editions = [['Ocidentais', cards.filter(c => !isAsian(c.id)).reduce((a, c) => a + qtyOf(c), 0)], ['Japonesas', cards.filter(c => isJa(c.id)).reduce((a, c) => a + qtyOf(c), 0)], ['Chinesas', cards.filter(c => isAsian(c.id) && !isJa(c.id)).reduce((a, c) => a + qtyOf(c), 0)]].filter(r => r[1]);
+  const editions = [['Brasileiras', cards.reduce((a, c) => a + (hasEditions(c) ? qtyIn(c, 'pt') : 0), 0)], ['Em inglês', cards.reduce((a, c) => a + (hasEditions(c) ? qtyIn(c, 'en') + (c.graded?.length || 0) : 0), 0)], ['Japonesas', cards.filter(c => isJa(c.id)).reduce((a, c) => a + qtyOf(c), 0)], ['Chinesas', cards.filter(c => isAsian(c.id) && !isJa(c.id)).reduce((a, c) => a + qtyOf(c), 0)]].filter(r => r[1]);
   const variants = new Map();
-  for (const c of cards) for (const [v, n] of Object.entries(c.qty || {})) variants.set(VARIANTS[v]?.label || v, (variants.get(VARIANTS[v]?.label || v) || 0) + n);
+  for (const c of cards) for (const [k, n] of Object.entries(c.qty || {})) { const l = VARIANTS[variantOfKey(k)]?.label || k; variants.set(l, (variants.get(l) || 0) + n); }
   const graded = cards.reduce((a, c) => a + (c.graded?.length || 0), 0);
   if (graded) variants.set('Graduadas', graded);
   const months = [];
@@ -430,7 +458,7 @@ async function statsBlock() {
     <div class="section"><h2>Sets com mais cartas</h2>${bars(sets)}</div>
     <div class="section"><h2>Acabamentos</h2>${bars([...variants].sort((a, b) => b[1] - a[1]))}</div>
     ${editions.length > 1 ? `<div class="section"><h2>Edições</h2>${bars(editions)}</div>` : ''}
-    ${priciest ? `<div class="section"><h2>Carta mais valiosa</h2>${railCard(priciest, money(valueOf(priciest) / qtyOf(priciest)))}</div>` : ''}`;
+    ${priciest ? `<div class="section"><h2>Carta mais valiosa</h2><div class="rail">${railCard(priciest, money(valueOf(priciest) / qtyOf(priciest)))}</div></div>` : ''}`;
 }
 
 async function renderProfile() {
@@ -440,7 +468,7 @@ async function renderProfile() {
     const ptab = route.ptab || 'showcase', handle = window.Social?.handle?.();
     view.innerHTML = `${bannerHtml(p.banner, bannerImage())}
       <div class="profile-actions"><button class="icon-btn" type="button" data-tab="settings" aria-label="Ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button></div>
-      <div class="identity"><span class="ring-avatar" style="${ringStyle(p.ring)}">${avatar()}</span><h1>${esc(trainerName())}</h1>
+      <div class="identity"><span class="ring-avatar" ${ringAttrs(p.ring)}>${avatar()}</span><h1>${esc(trainerName())}</h1>
         ${handle ? `<span class="muted">@${esc(handle)}</span>` : ''}${p.bio ? `<p>${esc(p.bio)}</p>` : ''}</div>
       <div class="row-btns"><button class="btn alt" type="button" data-edit-profile>Editar perfil</button><button class="btn alt" type="button" data-personalize>Personalizar</button></div>
       <div class="stat-grid">
@@ -479,7 +507,7 @@ function editProfile() {
   const p = store.profile;
   openSheet(`<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button><h2>Editar perfil</h2>
     <form id="profileForm" class="section">
-      <div class="identity" style="margin:0"><span class="ring-avatar" id="pPreview">${avatar()}</span></div>
+      <div class="identity" style="margin:0"><span class="ring-avatar" id="pPreview" ${ringAttrs(p.ring)}>${avatar()}</span></div>
       <label class="btn alt" for="pPhoto">Trocar foto</label>
       <input id="pPhoto" type="file" accept="image/*" hidden>
       ${p.photo ? '<button class="btn alt" type="button" data-photo-off>Remover foto</button>' : ''}
@@ -507,6 +535,14 @@ function renderSettings() {
     <div class="panel"><h2>Nomes das cartas e sets</h2>
       <div class="seg" role="group" aria-label="Idioma dos nomes">${[['pt', 'Português'], ['en', 'English']].map(([k, l]) => `<button type="button" data-names="${k}" class="${(store.namesEn ? 'en' : 'pt') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <p class="muted small">Cartas japonesas e chinesas mantêm o nome original. Quando a base não tem a tradução em português, aparece o nome em inglês.</p></div>
+    <div class="panel"><h2>Edição das cartas</h2>
+      <p class="muted small">Ao adicionar uma carta ocidental, ela entra como:</p>
+      <div class="seg" role="group" aria-label="Edição padrão">${EDITIONS.map(([k, l]) => `<button type="button" data-edition-default="${k}" class="${store.edition === k ? 'on' : ''}">${l.replace('Edição ', '')}</button>`).join('')}</div>
+      <label class="small muted" for="ptFactor">Valor das cartas brasileiras</label>
+      <select id="ptFactor" class="field">${[1, .9, .8, .7, .6, .5, .4, .3, .2].map(f => `<option value="${f}"${store.ptFactor === f ? ' selected' : ''}>${f === 1 ? 'Igual ao preço em inglês' : `${pct(f)} do preço em inglês`}</option>`).join('')}</select>
+      <p class="muted small">Não existe uma base pública de preços do mercado brasileiro. A edição brasileira usa o preço em inglês ajustado por este fator, ou o valor que você definir em cada carta.</p>
+      ${(() => { const en = list().filter(hasEditions).reduce((s, c) => s + qtyIn(c, 'en'), 0); return en ? `<button class="btn alt" type="button" data-convert-pt>Marcar minhas ${plural(en, 'cópia', 'cópias')} em inglês como brasileiras</button>
+      <p class="muted small">Use se as cartas que você já tinha são brasileiras: antes desta versão o app não separava as edições.</p>` : ''; })()}</div>
     <div class="panel"><h2>Moeda</h2>
       <div class="seg" role="group" aria-label="Moeda">${['BRL', 'USD', 'EUR'].map(c => `<button type="button" data-currency="${c}" class="${store.currency === c ? 'on' : ''}">${c}</button>`).join('')}</div>
       <p class="muted small">Os preços vêm da TCGplayer (EUA) e da Cardmarket (Europa) e são convertidos pela cotação do dia. O mercado brasileiro pode praticar valores diferentes.${store.fx ? ` US$ 1 = R$ ${store.fx.BRL.toFixed(2).replace('.', ',')}.` : ''}</p></div>
@@ -545,8 +581,8 @@ function cardExtras(card) {
   const liga = `<a class="btn alt" href="${esc(ligaUrl(card))}" target="_blank" rel="noopener">Ver na Liga Pokémon</a>`;
   if (!own) return `<div id="extras"><button class="btn" type="button" data-add-card>Adicionar à coleção · ${esc((VARIANTS[card.variants?.[0]] || VARIANTS.normal).label)}</button>${liga}</div>`;
   return `<div id="extras"><div class="split"><button class="btn alt${on ? ' toggled' : ''}" type="button" data-star>${on ? '★ Na vitrine' : '☆ Pôr na vitrine'}</button>${liga.replace('Ver na Liga Pokémon', 'Liga Pokémon')}</div>
-    <details${own.custom != null ? ' open' : ''}><summary>Definir meu valor</summary><form id="valueForm" class="value-form"><label for="valueInput" class="small muted">Valor por carta (R$)</label>
-    <input id="valueInput" class="field" inputmode="decimal" autocomplete="off" placeholder="Usar preço automático" value="${esc(brlText(own.custom))}">
+    ${(() => { const pt = editionNow(card) === 'pt', mine = pt ? own.customPt : own.custom; return `<details${mine != null ? ' open' : ''}><summary>Definir meu valor${hasEditions(card) ? pt ? ' (edição brasileira)' : ' (edição em inglês)' : ''}</summary><form id="valueForm" class="value-form"><label for="valueInput" class="small muted">Valor por carta (R$)</label>
+    <input id="valueInput" class="field" inputmode="decimal" autocomplete="off" placeholder="Usar preço automático" value="${esc(brlText(mine))}">`; })()}
     <button class="btn alt" type="submit">Salvar valor</button></form></details></div>`;
 }
 function manualForm() {
@@ -617,15 +653,22 @@ document.addEventListener('click', e => {
   removeGraded(sheetCard.id, b.dataset.ungrade);
   refreshCardPanel();
 });
+const EDITIONS = [['pt', 'Edição brasileira'], ['en', 'Edição em inglês']];
+const pct = f => `${Math.round(f * 100)}%`;
 function variantRows(card) {
-  const own = store.cards[card.id]?.qty || {};
+  const mine = store.cards[card.id], own = mine?.qty || {};
   const vs = card.variants.length ? card.variants : ['normal'];
-  return vs.map(v => {
-    const p = card.prices?.[v], custom = store.cards[card.id]?.custom, usd = custom != null ? customUsd(custom) : toUsd(p);
+  const lang = editionNow(card), pt = lang === 'pt', other = hasEditions(card) ? qtyIn(mine, pt ? 'en' : 'pt') : 0;
+  const toggle = hasEditions(card) ? `<div class="seg edition" role="group" aria-label="Edição da carta">${EDITIONS.map(([k, l]) => `<button type="button" data-edition="${k}" class="${lang === k ? 'on' : ''}" aria-pressed="${lang === k}">${l}</button>`).join('')}</div>
+    ${other ? `<p class="muted small">Você também tem ${plural(other, 'cópia', 'cópias')} na edição ${pt ? 'em inglês' : 'brasileira'}.</p>` : ''}` : '';
+  return toggle + vs.map(v => {
+    const key = keyOf(v, lang), p = card.prices?.[v], custom = pt ? mine?.customPt : mine?.custom;
+    const base = toUsd(p), usd = custom != null ? customUsd(custom) : base == null ? null : pt ? base * store.ptFactor : base;
     const src = [p?.usd != null ? `US$ ${p.usd.toFixed(2)}` : '', p?.eur ? `€ ${p.eur.toFixed(2)}` : ''].filter(Boolean).join(' · ');
+    const note = custom != null ? 'seu valor' : pt ? `referência: inglês${store.ptFactor !== 1 ? ` × ${pct(store.ptFactor)}` : ''}` : src;
     return `<div class="variant"><b>${VARIANTS[v].label}</b>
-      <div class="stepper"><button type="button" data-step="-1" data-variant="${v}" aria-label="Remover ${VARIANTS[v].label}">−</button><span>${own[v] || 0}</span><button type="button" data-step="1" data-variant="${v}" aria-label="Adicionar ${VARIANTS[v].label}">+</button></div>
-      <span class="prices">${custom != null ? `${money(usd)} <span class="small">(seu valor)</span>` : usd != null ? `${money(usd)} <span class="small">(${src})</span>` : 'Sem preço disponível'}</span></div>`;
+      <div class="stepper"><button type="button" data-step="-1" data-variant="${v}" aria-label="Remover ${VARIANTS[v].label}">−</button><span>${own[key] || 0}</span><button type="button" data-step="1" data-variant="${v}" aria-label="Adicionar ${VARIANTS[v].label}">+</button></div>
+      <span class="prices">${usd != null ? `${money(usd)} <span class="small">(${note})</span>` : 'Sem preço disponível'}</span></div>`;
   }).join('');
 }
 function cardHead(card) {
@@ -671,6 +714,26 @@ document.addEventListener('click', e => {
   const d = b.dataset;
   if (d.mySets !== undefined) go({ tab: 'sets', setId: null, region: 'mine', q: '' });
   else if (d.ptab) { route.ptab = d.ptab; renderProfile(); }
+  else if (d.edition && sheetCard) {
+    sheetLang = d.edition;
+    $('#variants').innerHTML = variantRows(sheetCard);
+    const x = $('#extras'); if (x) x.outerHTML = cardExtras(sheetCard);
+    const l = $('[data-edition-label]'); if (l) l.textContent = d.edition === 'pt' ? 'BR' : 'EN';
+  }
+  else if (d.editionDefault) { store.edition = d.editionDefault; save(); renderSettings(); }
+  else if (d.convertPt !== undefined) {
+    if (!confirm('Marcar todas as cópias em inglês das suas cartas ocidentais como edição brasileira?')) return;
+    const ids = [];
+    for (const c of list().filter(hasEditions)) {
+      let moved = false;
+      for (const [k, n] of Object.entries(c.qty || {})) if (!isPtKey(k)) { c.qty[k + PT] = (c.qty[k + PT] || 0) + n; delete c.qty[k]; moved = true; }
+      if (c.custom != null && c.customPt == null) { c.customPt = c.custom; delete c.custom; moved = true; }
+      if (moved) { c.updatedAt = Date.now(); ids.push(c.id); }
+    }
+    save(); window.Sync?.changedAll(ids);
+    toast(`${plural(ids.length, 'carta marcada', 'cartas marcadas')} como edição brasileira`);
+    renderSettings();
+  }
   else if (d.personalize !== undefined) personalize();
   else if (d.banner) { store.profile.banner = d.banner; delete store.profile.bannerCard; saveProfile(); personalize(); }
   else if (d.bannerCard) { store.profile.bannerCard = d.bannerCard; saveProfile(); personalize(); }
@@ -706,6 +769,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('submit', e => { if (e.target.id === 'exploreForm') { e.preventDefault(); $('#exploreQ').blur(); } });
 document.addEventListener('change', async e => {
+  if (e.target.id === 'ptFactor') { store.ptFactor = +e.target.value; save(); toast('Valor das cartas brasileiras atualizado'); }
   if (e.target.id === 'mPhoto' && e.target.files[0]) $('#mPhotoLabel').textContent = 'Foto escolhida';
   if (e.target.id === 'pPhoto' && e.target.files[0]) {
     pendingPhoto = await squarePhoto(e.target.files[0]).catch(() => undefined);
