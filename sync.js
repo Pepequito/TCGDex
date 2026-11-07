@@ -82,10 +82,49 @@ window.Sync = (() => {
       }
     }
     reconciled = true;
+    loadHistory(uid);
     const since = firebase.firestore.Timestamp.fromMillis(store.syncedAt || 0);
     unsub = cardsRef().where('syncAt', '>', since).onSnapshot({ includeMetadataChanges: true }, onSnapshot,
       () => { status = 'Erro ao sincronizar. Confira as regras do Firestore.'; paint(); });
   }
+  /* ---------- Histórico na nuvem ---------- */
+  // O histórico do valor da coleção (store.history) e o de preço de cada carta (store.priceLog) ficavam só no
+  // navegador e se perdiam ao trocar de aparelho ou de endereço. Agora ficam também num documento privado.
+  const historyRef = uid => db.collection('users').doc(uid).collection('private').doc('history');
+  // Junta duas listas [dia, valor]: o mesmo dia fica com o valor daqui (o mais recente deste aparelho).
+  const mergeDays = (local = [], remote = []) => {
+    const m = new Map(remote.map(p => [p[0], p[1]]));
+    for (const p of local) m.set(p[0], p[1]);
+    return [...m].sort((a, b) => a[0] < b[0] ? -1 : 1);
+  };
+  async function loadHistory(uid) {
+    try {
+      const d = (await historyRef(uid).get()).data();
+      if (!d || user?.uid !== uid) { if (store.history?.length) historyChanged(); return; }
+      const before = JSON.stringify([store.history, store.priceLog]);
+      store.history = mergeDays(store.history, d.history).slice(-365);
+      const log = store.priceLog ??= {};
+      for (const [id, pts] of Object.entries(d.priceLog || {})) log[id] = mergeDays(log[id], pts).slice(-90);
+      if (JSON.stringify([store.history, store.priceLog]) !== before) { save(); if (sheet.hidden && scanner.hidden) render(); }
+      if ((store.history?.length || 0) > (d.history?.length || 0) || Object.keys(log).length > Object.keys(d.priceLog || {}).length) historyChanged();
+    } catch { /* sem conexão ou regras antigas: tenta na próxima abertura */ }
+  }
+  let historyTimer = null;
+  function historyChanged() {
+    if (!user || !db) return;
+    clearTimeout(historyTimer);
+    historyTimer = setTimeout(async () => {
+      const priceLog = {};
+      for (const [id, pts] of Object.entries(store.priceLog || {})) priceLog[id] = pts.slice(-90);
+      // Um documento do Firestore vai até 1 MB: se o histórico de preços crescer demais, guarda os dias mais recentes.
+      for (const keep of [90, 60, 30, 14]) {
+        if (JSON.stringify(priceLog).length < 850000) break;
+        for (const id of Object.keys(priceLog)) priceLog[id] = priceLog[id].slice(-keep);
+      }
+      try { await historyRef(user.uid).set({ history: (store.history || []).slice(-365), priceLog, updatedAt: Date.now() }); } catch { /* tenta na próxima mudança */ }
+    }, 8000);
+  }
+
   function reconcile(snap) {
     const remote = new Map(snap.docs.map(d => [d.id, strip(d.data())]));
     const profile = remote.get(PROFILE);
@@ -252,6 +291,7 @@ window.Sync = (() => {
   if (!store.gate) showGate();
   return {
     showGate,
+    historyChanged,
     paint,
     changed(id) { if (user && db) send([id]); },
     changedAll(ids) { if (user && db) send(ids); },

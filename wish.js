@@ -27,6 +27,7 @@ window.Wish = (() => {
     for (const c of list()) if (c.setId !== 'custom') record(c.id, refPrice(c));
     for (const w of Object.values(list_())) record(w.id, w.usd);
     save();
+    window.Sync?.historyChanged?.();
   }
   function priceBlock(card) {
     const own = store.cards[card.id], c = { ...card, ...(own ? { qty: own.qty } : {}), prices: card.prices || own?.prices || {} };

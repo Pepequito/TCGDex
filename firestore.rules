@@ -55,6 +55,11 @@ service cloud.firestore {
       allow write: if isMe(uid) && isMember();
     }
 
+    // Dados privados do dono (histórico de valores): só ele lê e grava.
+    match /users/{uid}/private/{doc} {
+      allow read, write: if isMe(uid) && isMember();
+    }
+
     // Perfil público: qualquer um lê, menos quando o dono escolheu "privado".
     match /profiles/{uid} {
       allow read: if isMe(uid) || (resource != null && resource.data.privacy != 'private');

@@ -120,6 +120,7 @@ function trackValue(total) {
   else h.push([day, total]);
   if (h.length > 365) h.shift();
   save();
+  window.Sync?.historyChanged?.();
 }
 const dayLabel = d => d.slice(8, 10) + '/' + d.slice(5, 7);
 // Variação do valor no período (7, 30, 90 dias ou tudo), a partir do histórico diário.

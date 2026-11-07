@@ -16,6 +16,24 @@ function save() {
   catch { toast('Não consegui salvar. Libere espaço no iPhone.'); }
 }
 navigator.storage?.persist?.();
+// Histórico trazido do endereço antigo (pepequito.github.io), na mudança para boosterz.web.app.
+(() => {
+  const params = new URLSearchParams(location.search), raw = params.get('hist');
+  if (!raw) return;
+  try {
+    const pack = JSON.parse(raw), days = new Map((pack.h || []).map(p => [p[0], p[1]]));
+    for (const p of store.history || []) days.set(p[0], p[1]);
+    store.history = [...days].sort((x, y) => x[0] < y[0] ? -1 : 1).slice(-365);
+    for (const [id, pts] of Object.entries(pack.p || {})) {
+      const m = new Map(pts.map(p => [p[0], p[1]]));
+      for (const p of (store.priceLog ??= {})[id] || []) m.set(p[0], p[1]);
+      store.priceLog[id] = [...m].sort((x, y) => x[0] < y[0] ? -1 : 1).slice(-90);
+    }
+    save();
+  } catch { /* link incompleto: segue sem o histórico antigo */ }
+  params.delete('hist');
+  history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash);
+})();
 
 /* ---------- Tema claro e escuro ---------- */
 // O modo escuro economiza bateria em telas OLED; "auto" acompanha o aparelho.
