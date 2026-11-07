@@ -51,15 +51,15 @@ async function fetchRetry(url, tries = 3) {
     while (queue.length) {
       const c = queue.shift();
       try {
-        const external = c.image.startsWith('https://images.pokemontcg.io/');
-        const res = await fetchRetry(external ? c.image + '.png' : c.image + '/low.webp');
+        const external = c.image.startsWith('https://images.pokemontcg.io/'), file = /\.(jpe?g|png|webp)(\?|$)/i.test(c.image);
+        const res = await fetchRetry(file ? c.image : external ? c.image + '.png' : c.image + '/low.webp');
         if (!res.ok) throw new Error(res.status);
         const img = sharp(Buffer.from(await res.arrayBuffer())).removeAlpha(), m = await img.metadata();
         const raw = await img.extract({ left: Math.round(m.width * ART.x), top: Math.round(m.height * ART.y), width: Math.round(m.width * ART.w), height: Math.round(m.height * ART.h) })
           .resize(S, S, { fit: 'fill', kernel: 'cubic' }).raw().toBuffer();
         // Imagem de outro idioma (ex.: trainer kits em espanhol) fica com o endereço completo da carta.
         const own = `https://assets.tcgdex.net/${c.lg}/`;
-        const base = external ? c.image : c.image.startsWith(own) ? c.image.replace(own, '').replace(/\/[^/]*$/, '') : c.image;
+        const base = external || file ? c.image : c.image.startsWith(own) ? c.image.replace(own, '').replace(/\/[^/]*$/, '') : c.image;
         if (!pathIx.has(base)) { pathIx.set(base, index.paths.length); index.paths.push(base); }
         rows.push([c.key, pathIx.get(base)]);
         hashes.push(hash(raw));

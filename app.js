@@ -81,6 +81,13 @@ const isPocket = id => /^(A|B)\d+[a-z]?$|^P-/.test(id);
 const SET_AGE = new Map();
 // id -> [nome em português, nome em inglês]
 const SOON = { me06: ['Reinado Delta', 'Delta Reign'] };
+// Sets importados de outra fonte enquanto a TCGdex não publica (data/extra-sets/<id>.json).
+const getExtra = id => once('extra:' + id, () => getJSON(`data/extra-sets/${id}.json`));
+const extraSetOf = id => Object.keys(SOON).find(s => id === s || id.startsWith(s + '-'));
+function extraCard(set, c) {
+  return { id: c.id, localId: c.localId, name: c.name, nameEn: c.name, image: c.image, imageEn: c.image, rarity: c.rarity || '',
+    setId: set.id, setName: preferName(SOON[set.id]?.[0], set.nameEn), variants: c.variants, prices: c.prices };
+}
 const getSets = () => once('sets', async () => {
   const asianLists = Object.entries(ASIAN).map(([pre, L]) => getJSON(`${API}/${L.api}/sets`).then(list => list.map(s => ({ ...s, pre }))).catch(() => []));
   const [en, pt, extra, ...asian] = await Promise.all([getJSON(`${API}/en/sets`), getJSON(`${API}/pt/sets`).catch(() => []), getJSON('data/set-logos.json').catch(() => ({})), ...asianLists]);
@@ -89,8 +96,11 @@ const getSets = () => once('sets', async () => {
   const ptById = new Map(pt.map(s => [s.id, s]));
   const known = new Set(en.map(s => s.id));
   // Sets anunciados que a TCGdex ainda não publicou aparecem como "em breve", com o logo oficial.
-  const soon = Object.entries(SOON).filter(([id]) => !known.has(id)).map(([id, [pt, enName]]) => ({
-    id, nameEn: enName, name: preferName(pt, enName), official: 0, total: 0, logoPt: ptLogos[id], serie: 'me', soon: true,
+  const soon = await Promise.all(Object.entries(SOON).filter(([id]) => !known.has(id)).map(async ([id, [pt, enName]]) => {
+    const extra = await getExtra(id).catch(() => null);
+    return extra?.cards?.length
+      ? { id, nameEn: enName, name: preferName(pt, enName), official: extra.official, total: extra.total, logoPt: ptLogos[id], serie: 'me', extra: true }
+      : { id, nameEn: enName, name: preferName(pt, enName), official: 0, total: 0, logoPt: ptLogos[id], serie: 'me', soon: true };
   }));
   // Quantos sets saíram depois de cada um (a TCGdex lista do mais antigo ao mais novo, sem datas).
   const west = en.filter(s => !isPocket(s.id));
@@ -130,6 +140,13 @@ const getSet = id => id === 'custom' ? Promise.resolve(customSet()) : once('set:
       cards: as.cards.map(c => ({ id: pre + c.id, localId: c.localId, name: c.name, nameEn: c.name, image: c.image, imageEn: c.image, setId: id })),
     });
   }
+  if (SOON[id]) {
+    const res = await fetch(`${API}/en/sets/${id}`).catch(() => null);
+    if (!res?.ok) {
+      const x = await getExtra(id);
+      return { id, name: preferName(SOON[id][0], x.nameEn), official: x.official, total: x.total, abbr: '', tcgOnline: '', cards: x.cards.map(c => extraCard(x, c)) };
+    }
+  }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/sets/${id}`), getJSON(`${API}/pt/sets/${id}`).catch(() => null)]);
   const ptCards = new Map((pt?.cards || []).map(c => [c.localId, c]));
   return fillSet({
@@ -149,6 +166,15 @@ const getCard = id => once('card:' + id, async () => {
       rarity: as.rarity || '', setId: pre + as.set.id, setName: as.set.name,
       variants: Object.keys(VARIANTS).filter(v => as.variants?.[v]), prices: extractPrices(as),
     });
+  }
+  const extraSet = extraSetOf(id);
+  if (extraSet) {
+    const res = await fetch(`${API}/en/cards/${id}`).catch(() => null);
+    if (!res?.ok) {
+      const x = await getExtra(extraSet), c = x.cards.find(k => k.id === id);
+      if (!c) throw new Error('carta não encontrada');
+      return extraCard(x, c);
+    }
   }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/cards/${id}`), getJSON(`${API}/pt/cards/${id}`).catch(() => null)]);
   return fillCard({
@@ -185,6 +211,7 @@ function extractPrices(card) {
   return out;
 }
 const imageUrl = (base, q = 'low') => !base ? '' : base.startsWith('data:') ? base
+  : /\.(jpe?g|png|webp)(\?|$)/i.test(base) ? (q === 'high' ? base.replace('_in_400x400', '_in_800x800') : base)
   : base.startsWith('https://images.pokemontcg.io/') ? base + (q === 'high' ? '_hires.png' : '.png') : `${base}/${q}.webp`;
 function imgTag(c, q = 'low', alt = '') {
   // Carta que a pessoa só tem na edição em inglês aparece com a arte em inglês nas listas.
