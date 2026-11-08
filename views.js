@@ -198,7 +198,7 @@ async function renderHome() {
       <button class="ring-avatar" type="button" data-tab="profile" aria-label="Abrir perfil" ${ringAttrs(store.profile.ring)}>${avatar()}</button></span></div>
     <div class="hero"><div><span class="label">Valor da coleção</span><span class="value">${money(total)}</span></div>
       ${cards.length ? valueChart() : ''}
-      <div class="chips"><button type="button" class="chip" data-mine="all"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'} ›</button><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span></div></div>
+      <div class="chips"><button type="button" class="chip" data-mine="all"><b>${copies}</b> ${copies === 1 ? 'carta' : 'cartas'} ›</button><span class="chip"><b>${cards.length}</b> ${cards.length === 1 ? 'diferente' : 'diferentes'}</span>${window.Sealed?.count() ? `<button type="button" class="chip" data-mine="sealed">📦 <b>${money(Sealed.valueUsd())}</b> em lacrados ›</button>` : ''}</div></div>
     ${window.Sync?.nudge() || ''}${window.Wish?.banner() || ''}
     ${cards.length ? `
     <div class="section"><div class="section-head"><h2>Mais valiosas</h2><span class="muted small">por carta</span></div><div class="rail">${top.map(c => railCard(c, money(unitValue(c)))).join('')}</div></div>
@@ -292,7 +292,7 @@ function pocket(c, ed = 'all', has = !!store.cards[c.id]) {
 }
 
 /* ---------- Minhas cartas (celular) ---------- */
-const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['wish', 'Desejos'], ['binders', 'Pastas'], ['hot', 'Valorização'], ['all', 'Todas']];
+const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['wish', 'Desejos'], ['binders', 'Pastas'], ['sealed', 'Lacrados'], ['hot', 'Valorização'], ['all', 'Todas']];
 function dupeRow(c) {
   const keep = keptCopy(c), spare = spareCopies(c), copies = copiesOf(c);
   return `<article class="dupe">
@@ -327,7 +327,7 @@ function renderMine() {
       : '<div class="empty"><h2>Nenhuma repetida</h2><p class="muted">Quando você tiver mais de uma cópia da mesma carta, ela aparece aqui.</p></div>';
   } else if (tab === 'wish') body = window.Wish?.page() || '';
   else if (tab === 'binders') body = window.Binders?.page() || '';
-  else if (tab === 'sealed') body = window.Binders?.sealedPage() || '';
+  else if (tab === 'sealed') body = window.Sealed?.page() || '';
   else if (tab === 'hot') {
     const h = cards.map(c => [c, potential(c)]).filter(([, p]) => p?.high).sort((a, b) => b[1].score - a[1].score || valueOf(b[0]) - valueOf(a[0])).map(([c]) => c);
     body = `<p class="muted small">Cartas com sinais de valorização: preço subindo, raridade de alta demanda, Pokémon procurado e set mais antigo. Toque numa carta para ver os motivos. Indicador automático, não é recomendação de investimento.</p>

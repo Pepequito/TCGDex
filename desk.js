@@ -56,6 +56,7 @@ window.Desk = (() => {
             <button type="button" data-mine="all"><b>${all.length}</b><span>Diferentes</span></button>
             <button type="button" data-mine="dupes"><b>${money(spare)}</b><span>Em repetidas</span></button>
             <button type="button" data-mine="hot"><b>${hot}</b><span>📈 Valorizando</span></button>
+            ${window.Sealed?.count() ? `<button type="button" data-mine="sealed"><b>${money(Sealed.valueUsd())}</b><span>📦 Lacrados</span></button>` : ''}
           </div>
         </div>
         <div class="pf-chart">
