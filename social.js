@@ -44,8 +44,18 @@ window.Social = (() => {
   async function publicDoc() {
     const u = window.Sync?.user?.() || {};
     const p = store.profile, taste = await tasteOf().catch(() => ({ favs: [], sets: [] }));
+    // Para trocas e ranking: o que a pessoa quer, o que tem repetido, sets completos e cartas da semana.
+    // A lista de todas as cartas só vai quando o perfil é público.
+    const owned = ownedBySet(), allSets = await getSets().catch(() => []);
+    const completed = allSets.filter(x => x.total && owned[x.id] >= x.total).length;
+    const week = list().filter(c => Date.now() - (c.addedAt || 0) < 7 * 864e5).reduce((n, c) => n + qtyOf(c), 0);
+    const privacy = mine.privacy || 'public';
     return {
       city: p.city || '', state: p.state || '', favs: taste.favs, sets: taste.sets,
+      wants: (window.Wish?.ids() || []).slice(0, 300),
+      spares: list().filter(c => qtyOf(c) > 1 && c.setId !== 'custom').map(c => c.id).slice(0, 400),
+      own: privacy === 'public' ? list().filter(c => c.setId !== 'custom').map(c => c.id).slice(0, 4000) : [],
+      completed, week,
       uid: me.uid, username: mine.username, name: trainerName(), bio: p.bio || '',
       photo: p.photo || u.photo || '', privacy: mine.privacy || 'public', showValue: !!mine.showValue,
       value: mine.showValue ? Math.round(collectionValue() * 100) / 100 : null,
@@ -165,7 +175,7 @@ window.Social = (() => {
           <input id="peopleQ" class="field" type="search" placeholder="Procurar pessoas por @usuário" aria-label="Procurar pessoas" autocomplete="off" autocapitalize="none">
           <div id="peopleOut" class="people"></div></div>
         <details class="panel" id="followingBox"><summary><b>Quem você segue</b></summary><div id="followingOut" class="people"><p class="muted small">Carregando…</p></div></details>
-      </div><div class="feed-col"><div class="seg" role="tablist" aria-label="Feed">${[['friends', 'Amigos'], ['community', 'Comunidade']].map(([k, l]) => `<button type="button" role="tab" data-stab="${k}" aria-selected="${(route.stab || 'friends') === k}" class="${(route.stab || 'friends') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      </div><div class="feed-col"><div class="seg" role="tablist" aria-label="Feed">${[['friends', 'Amigos'], ['community', 'Comunidade'], ['trades', 'Trocas'], ['ranking', 'Ranking']].map(([k, l]) => `<button type="button" role="tab" data-stab="${k}" aria-selected="${(route.stab || 'friends') === k}" class="${(route.stab || 'friends') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="feed" id="feed"><p class="muted">Carregando…</p></div></div></div>`;
     loadFeed();
   }
@@ -200,6 +210,8 @@ window.Social = (() => {
       if (out) out.innerHTML = b.following.length ? b.following.map(f => personRow(f.username, f.uid, true)).join('')
         : '<p class="muted small">Você ainda não segue ninguém.</p>';
       if ((route.stab || 'friends') === 'community') return loadCommunity(new Set(b.following.map(f => f.uid)), force);
+      if (route.stab === 'trades') return window.Trades?.render(b.following, force);
+      if (route.stab === 'ranking') return window.Trades?.ranking(b.following, force);
       // Amigos: só o que as pessoas que você segue adicionaram.
       if (force || !fresh(cache.friends, FRESH)) {
         const lists = await Promise.all(b.following.slice(0, 40).map(async ({ uid }) => {
@@ -500,5 +512,5 @@ window.Social = (() => {
   window.addEventListener('hashchange', openFromHash);
   openFromHash();
 
-  return { onUser, ownBlock, renderSocial, renderFriend, publishSoon, added, handle };
+  return { onUser, ownBlock, renderSocial, renderFriend, publishSoon, publish, added, handle, face };
 })();

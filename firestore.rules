@@ -107,6 +107,22 @@ service cloud.firestore {
       }
     }
 
+    // Trocas: quem propõe cria; só as duas pessoas leem. Quem recebe aceita ou recusa, quem propôs cancela,
+    // e depois de aceita cada lado marca que já atualizou a própria coleção.
+    match /trades/{tid} {
+      allow create: if isMember() && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string && request.resource.data.to != request.auth.uid
+        && request.resource.data.status == 'open' && request.resource.data.appliedFrom == false && request.resource.data.appliedTo == false;
+      allow read: if request.auth != null && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+      allow update: if request.auth != null && (
+        (resource.data.to == request.auth.uid && resource.data.status == 'open' && request.resource.data.status in ['accepted', 'declined']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'answeredAt']))
+        || (resource.data.from == request.auth.uid && resource.data.status == 'open' && request.resource.data.status == 'cancelled'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'answeredAt']))
+        || (resource.data.from == request.auth.uid && resource.data.status == 'accepted' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['appliedFrom']))
+        || (resource.data.to == request.auth.uid && resource.data.status == 'accepted' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['appliedTo'])));
+    }
+
     // Fotos enviadas pela comunidade para cartas sem imagem: membro envia; só o admin vê, aprova e apaga.
     match /cardPhotos/{pid} {
       allow create: if isMember() && request.resource.data.uid == request.auth.uid
