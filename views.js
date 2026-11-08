@@ -273,7 +273,7 @@ async function renderSet() {
   const value = list().filter(c => c.setId === s.id).reduce((a, c) => a + valueOf(c), 0);
   view.innerHTML = `${back}
     <div class="set-hero">${logo ? `<img alt="" src="${esc(logo)}" data-next="${info ? artFallback(info) : ''}" data-hide-broken>` : ''}<h1>${esc(s.name)}</h1>
-      <div class="stats">${ring(pct, !left)}<p><b>${money(value)}</b><span class="muted">${left ? `Faltam ${left} de ${inScope.length}` : 'Set completo'}</span></p></div></div>
+      <div class="stats">${ring(pct, !left)}<p><b>${money(value)}</b><span class="muted">${left ? `Faltam ${left} de ${inScope.length}` : 'Set completo'}</span></p></div>${have && s.id !== 'custom' ? window.Share?.setButton(s.id) || '' : ''}</div>
     <div class="controls">
       <div class="seg" role="group" aria-label="Quais cartas contam">
         <button type="button" data-scope="all" class="${scope === 'all' ? 'on' : ''}">Completo (${s.cards.length})</button>
@@ -551,7 +551,7 @@ async function renderProfile() {
         <div class="stat"><b>${completed}</b><span>Sets completos</span></div>
         <div class="stat"><b>${won}/${list_.length}</b><span>Conquistas</span></div></div>
       <div class="seg" role="tablist" aria-label="Seções do perfil">${[['showcase', 'Vitrine'], ['stats', 'Estatísticas'], ['badges', 'Conquistas']].map(([k, l]) => `<button type="button" role="tab" data-ptab="${k}" aria-selected="${ptab === k}" class="${ptab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-      <div id="ptab">${ptab === 'showcase' ? `<div class="section"><div class="section-head"><h2>Vitrine</h2>${showcaseCards().length ? '<button type="button" data-pick>Editar</button>' : ''}</div>${showcaseBlock()}</div>`
+      <div id="ptab">${ptab === 'showcase' ? `<div class="section"><div class="section-head"><h2>Vitrine</h2>${showcaseCards().length ? `<span class="head-actions">${window.Share?.showcaseButton() || ''}<button type="button" data-pick>Editar</button></span>` : ''}</div>${showcaseBlock()}</div>`
         : ptab === 'badges' ? `<div class="section"><div class="badges">${[...list_].sort((a, b) => b[3] - a[3]).map(badge).join('')}</div></div>`
         : '<p class="muted section">Calculando…</p>'}</div>`;
     if (ptab === 'stats') statsBlock().then(html => { if (route.tab === 'profile' && route.ptab === 'stats' && $('#ptab')) $('#ptab').innerHTML = `<div class="section">${html}</div>`; });
@@ -783,7 +783,7 @@ async function showCard(id) {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}${window.Photos?.sendButton(sheetCard) || ''}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${window.Wish?.priceBlock(sheetCard) || ''}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}${window.Wish?.block(sheetCard) || ''}${window.Binders?.cardButton(sheetCard) || ''}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
+    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}${window.Photos?.sendButton(sheetCard) || ''}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${window.Wish?.priceBlock(sheetCard) || ''}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}${window.Wish?.block(sheetCard) || ''}${window.Binders?.cardButton(sheetCard) || ''}${window.Share?.cardButton(sheetCard) || ''}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
 

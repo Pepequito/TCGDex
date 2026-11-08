@@ -949,3 +949,8 @@ select.field.mini { width: auto; }
 .up { color: #3ddc97; } .down { color: var(--danger); }
 :root[data-theme="light"] .up { color: #0f7a52; }
 .pf-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* ---------- Compartilhar ---------- */
+.share-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.share-btn svg, .share-link svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.share-link { display: inline-flex; align-items: center; gap: 6px; color: var(--cyan); font-weight: 600; font-size: 14px; }
+.head-actions { display: inline-flex; gap: 14px; align-items: center; }
