@@ -292,7 +292,7 @@ function pocket(c, ed = 'all', has = !!store.cards[c.id]) {
 }
 
 /* ---------- Minhas cartas (celular) ---------- */
-const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['wish', 'Desejos'], ['hot', 'Valorização'], ['all', 'Todas']];
+const MINE_TABS = [['recent', 'Recentes'], ['dupes', 'Repetidas'], ['wish', 'Desejos'], ['binders', 'Pastas'], ['hot', 'Valorização'], ['all', 'Todas']];
 function dupeRow(c) {
   const keep = keptCopy(c), spare = spareCopies(c), copies = copiesOf(c);
   return `<article class="dupe">
@@ -783,7 +783,7 @@ async function showCard(id) {
     const own = store.cards[id];
     sheetCard = own?.setId === 'custom' ? { ...own, variants: ['normal'] } : await getCard(id);
     if (sheet.hidden) return;
-    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}${window.Photos?.sendButton(sheetCard) || ''}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${window.Wish?.priceBlock(sheetCard) || ''}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}${window.Wish?.block(sheetCard) || ''}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
+    sheet.innerHTML = `<button class="sheet-x" type="button" data-close aria-label="Fechar">✕</button>${cardHead(sheetCard)}${window.Photos?.sendButton(sheetCard) || ''}<div id="variants">${variantRows(sheetCard)}</div>${potentialBlock(sheetCard)}${window.Wish?.priceBlock(sheetCard) || ''}${gradedBlock(sheetCard)}${cardExtras(sheetCard)}${window.Wish?.block(sheetCard) || ''}${window.Binders?.cardButton(sheetCard) || ''}<button class="report-link" type="button" data-report="card">Algo errado com esta carta? Avise a gente</button>`;
   } catch { sheet.innerHTML = '<p>Não consegui carregar esta carta. Verifique a conexão.</p><button class="btn alt" type="button" data-close>Fechar</button>'; }
 }
 
