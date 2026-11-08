@@ -177,11 +177,21 @@ const getCard = id => once('card:' + id, async () => {
     }
   }
   const [en, pt] = await Promise.all([getJSON(`${API}/en/cards/${id}`), getJSON(`${API}/pt/cards/${id}`).catch(() => null)]);
+  // Set recém-publicado na TCGdex, ainda sem preço: usa o preço e as variantes da importação (data/extra-sets).
+  let prices = extractPrices(en), variants = Object.keys(VARIANTS).filter(v => en.variants?.[v]);
+  // Enquanto a TCGdex completa o set, as variantes da importação (TCGplayer) somam às dela,
+  // e o preço em dólar que faltar vem da importação.
+  if (extraSet) {
+    const x = await getExtra(extraSet).catch(() => null), c = x?.cards.find(k => k.id === id);
+    if (c) {
+      variants = [...new Set([...variants, ...c.variants])];
+      for (const v of c.variants) prices[v] = { ...(prices[v] || {}), usd: prices[v]?.usd ?? c.prices[v]?.usd ?? null, eur: prices[v]?.eur ?? null };
+    }
+  }
   return fillCard({
     id, localId: en.localId, name: preferName(pt?.name, en.name), nameEn: en.name, image: pt?.image || en.image, imageEn: en.image,
     rarity: store.namesEn ? en.rarity || '' : pt?.rarity || en.rarity || '', setId: en.set.id, setName: preferName(pt?.set?.name, en.set.name),
-    variants: Object.keys(VARIANTS).filter(v => en.variants?.[v]),
-    prices: extractPrices(en),
+    variants, prices,
   });
 });
 const VARIANTS = {

@@ -11,7 +11,9 @@ const VARIANT = { Normal: 'normal', Holofoil: 'holo', 'Reverse Holofoil': 'rever
 (async () => {
   const key = fs.readFileSync(path.join(root, '.secrets/pokeprice.key'), 'utf8').trim();
   const get = async url => { const r = await fetch(url, { headers: { Authorization: 'Bearer ' + key } }); if (!r.ok) throw new Error(r.status + ' ' + await r.text()); return r.json(); };
-  const set = (await get(`${API}/sets?search=${encodeURIComponent(apiSet)}&language=english`)).data.find(s => s.tcgPlayerId === apiSet);
+  // A busca de sets é pelo nome: "me06-delta-reign" vira "delta reign".
+  const term = apiSet.replace(/^[a-z]+\d+[a-z]*-/i, '').replace(/-/g, ' ');
+  const set = (await get(`${API}/sets?search=${encodeURIComponent(term)}&language=english`)).data.find(s => s.tcgPlayerId === apiSet);
   if (!set) throw new Error('set não encontrado na API: ' + apiSet);
   const page = await get(`${API}/cards?setId=${encodeURIComponent(apiSet)}&language=english&sortBy=cardNumber&sortOrder=asc&limit=${limit}&offset=${offset}`);
   const file = path.join(root, 'data/extra-sets', id + '.json');
