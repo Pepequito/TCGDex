@@ -792,6 +792,8 @@ function closeScanner() {
   stream?.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null;
   torchOn = false; $('#torch').classList.remove('on');
   scanner.hidden = true; render();
+  // Fechou com cartas na lista do modo sequência: abre a revisão para não perder nada.
+  if (window.Batch?.size()) Batch.review();
 }
 function grabGuide() {
   const g = $('#guide').getBoundingClientRect(), v = video.getBoundingClientRect();
@@ -828,6 +830,8 @@ async function scanLoop() {
       if (sure) {
         misses = 0; say('Carta encontrada'); shown = top.id;
         cards = await rerank(cards, frame, W, H);
+        // Modo sequência: a carta vai para a lista e o scanner segue para a próxima.
+        if (window.Batch?.on()) { if (scanning) Batch.add({ cards, src: frame }); continue; }
         if (scanning) { paused = true; showMatch({ cards, src: frame }); }
         continue;
       }
@@ -836,7 +840,10 @@ async function scanLoop() {
       // Carta lançada depois de o banco ser gerado: o número impresso ainda resolve.
       if (++frames % 16 === 0) {
         const r = await identify(frame, W, H);
-        if (!paused && scanning && confident(r)) { paused = true; showMatch({ ...r, src: frame }); }
+        if (!paused && scanning && confident(r)) {
+          if (window.Batch?.on()) { shown = r.cards[0].id; Batch.add({ cards: r.cards, src: frame }); continue; }
+          paused = true; showMatch({ ...r, src: frame });
+        }
       }
     } catch { say('Sem conexão com o banco de cartas.'); await new Promise(r => setTimeout(r, 1500)); }
   }
