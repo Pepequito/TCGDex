@@ -12,8 +12,12 @@ const VARIANT = { Normal: 'normal', Holofoil: 'holo', 'Reverse Holofoil': 'rever
   const key = fs.readFileSync(path.join(root, '.secrets/pokeprice.key'), 'utf8').trim();
   const get = async url => { const r = await fetch(url, { headers: { Authorization: 'Bearer ' + key } }); if (!r.ok) throw new Error(r.status + ' ' + await r.text()); return r.json(); };
   // A busca de sets é pelo nome: "me06-delta-reign" vira "delta reign".
-  const term = apiSet.replace(/^[a-z]+\d+[a-z]*-/i, '').replace(/-/g, ' ');
-  const set = (await get(`${API}/sets?search=${encodeURIComponent(term)}&language=english`)).data.find(s => s.tcgPlayerId === apiSet);
+  // Tenta o nome sem o código do começo ("me06-delta-reign" -> "delta reign") e depois o nome inteiro.
+  let set = null;
+  for (const term of [apiSet.replace(/^[a-z]+\d*[a-z]*-/i, '').replace(/-/g, ' '), apiSet.replace(/-/g, ' ')]) {
+    set = (await get(`${API}/sets?search=${encodeURIComponent(term)}&language=english`)).data.find(s => s.tcgPlayerId === apiSet);
+    if (set) break;
+  }
   if (!set) throw new Error('set não encontrado na API: ' + apiSet);
   const page = await get(`${API}/cards?setId=${encodeURIComponent(apiSet)}&language=english&sortBy=cardNumber&sortOrder=asc&limit=${limit}&offset=${offset}`);
   const file = path.join(root, 'data/extra-sets', id + '.json');
@@ -23,18 +27,26 @@ const VARIANT = { Normal: 'normal', Holofoil: 'holo', 'Reverse Holofoil': 'rever
   Object.assign(out, { id, nameEn: set.name.replace(/^[A-Z0-9.]+:\s*/, ''), total: set.cardCount, official, releaseDate: set.releaseDate?.slice(0, 10), source: 'pokemonpricetracker', updatedAt: new Date().toISOString() });
   const byId = new Map(out.cards.map(c => [c.id, c]));
   for (const c of page.data) {
-    const local = String(c.cardNumber).split('/')[0].padStart(3, '0');
+    // Número da carta: "089/103" ou só "089" (promos). Sem número, não dá para casar com a TCGdex.
+    const num = String(c.cardNumber || '').split('/')[0].replace(/^[A-Z]+(?=\d)/i, '');
+    if (!/^\d+$/.test(num)) continue;
+    const local = num.padStart(3, '0');
     const prices = {};
     for (const [name, v] of Object.entries(c.variants || {})) {
       const key = VARIANT[name] || (/holo/i.test(name) ? 'holo' : 'normal');
       if (v.marketPrice != null && prices[key] == null) prices[key] = { usd: v.marketPrice, eur: null };
     }
+    if (!Object.keys(prices).length && c.prices?.market != null) prices[/holo/i.test(c.prices.primaryPrinting || '') ? 'holo' : 'normal'] = { usd: c.prices.market, eur: null };
+    // A mesma carta pode vir mais de uma vez (versões com carimbo): fica a primeira que tem imagem.
+    if (byId.get(`${id}-${local}`)?.image && byId.get(`${id}-${local}`).source === 'page') continue;
     byId.set(`${id}-${local}`, {
-      id: `${id}-${local}`, localId: local, name: c.name.replace(/\s+-\s+\d+\/\d+.*$/, '').trim(), rarity: c.rarity || '', tcgplayer: c.tcgPlayerId,
+      source: 'page',
+      id: `${id}-${local}`, localId: local, name: c.name.replace(/\s+-\s+\d+(\/\d+)?\b.*$/, '').trim(), rarity: c.rarity || '', tcgplayer: c.tcgPlayerId,
       image: c.imageCdnUrl400 || c.imageUrl || '', imageHigh: c.imageCdnUrl800 || c.imageCdnUrl || '',
       variants: Object.keys(prices).length ? Object.keys(prices) : ['normal'], prices,
     });
   }
+  for (const c of byId.values()) delete c.source;
   out.cards = [...byId.values()].sort((a, b) => a.localId.localeCompare(b.localId, 'en', { numeric: true }));
   fs.writeFileSync(file, JSON.stringify(out));
   console.log(`${out.nameEn}: ${out.cards.length} de ${out.total} cartas importadas | créditos usados agora: ${page.metadata?.apiCallsConsumed?.total ?? '?'}`);
